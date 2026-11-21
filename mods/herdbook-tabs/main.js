@@ -22,10 +22,13 @@ export default class Tabs extends View {
     try { this.panels = JSON.parse(localStorage.getItem("panels") ?? "{}"); } catch { this.panels = {}; }
     if (!this.panels || typeof this.panels !== "object" || Array.isArray(this.panels)) this.panels = {};
     this.swipe = { acc: 0, steps: 0, at: 0, last: 0 };
-    // Right-click opens herdbook-menu (Move to space…), else Herdr's menu.
+    // Right-click opens herdbook-menu (Move to space…), else Herdr's menu;
+    // + opens launch-menu (github.com/zylbeyondlimits/herdr-launch-menu), else Herdr's new-menu.
     this.menu = "menu";
+    this.plus = "new-menu";
     cx.spawn(async (cx) => {
       if (await installed("herdbook-menu")) this.menu = "herdbook-menu";
+      if (await installed("launch-menu")) this.plus = "launch-menu";
       cx.notify();
     });
   }
@@ -151,7 +154,7 @@ export default class Tabs extends View {
       .child(h_flex().id("tab-scroll").flex_1().min_w(0).h_full().items_center().gap(3).overflow_x_scrollbar().track_scroll(this.scroll)
         .on_size_change((_size, cx) => { if (active >= 0) { this.scroll.scroll_to_item(active); cx.notify(); } })
         .children(shown.map(item)))
-      .child(button("tab-new", "+", () => openOverlay({ mod: "new-menu", kind: "popup", width: 250, height: 512 })))
+      .child(button("tab-new", "+", () => openOverlay({ mod: this.plus, kind: "popup", width: this.plus === "new-menu" ? 250 : 268, height: 512 })))
       .when(enabled.includes("files"), el => el.child(panelButton("files", "Files", "mods/files/file.svg")))
       .when(enabled.includes("changes"), el => el.child(panelButton("changes", "Changes", "mods/changes/changes.svg")))
       .when(w?.buttons, el => el.child(button("minimize", w.platform === "windows" ? svg("mods/herdbook-tabs/win-min.svg").size(16) : "−", () => run("window.minimize")))

@@ -28,6 +28,9 @@ It copies `layouts/herdbook.json` and the five `mods/herdbook-*` folders,
 merges `keys.json` (Alt-F2), and switches to the layout. Your own layout stays
 as it was: `ctrl-shift-l` switches back.
 
+With [Launch Menu](https://github.com/zylbeyondlimits/herdr-launch-menu)
+installed, the tab bar's + opens it instead of Herdr's menu.
+
 Only want part of it? Each mod works alone. Put `herdbook-agents`,
 `herdbook-tabs` or `herdbook-pane` in your own layout's agents block, tab
 block or pane header, and set `"terminal_menu": "herdbook-menu"` for the
