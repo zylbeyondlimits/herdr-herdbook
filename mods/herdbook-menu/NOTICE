@@ -1,0 +1,9 @@
+herdbook-menu is a modified copy of the `menu` mod shipped with the Herdr
+desktop app 0.1.16 (https://github.com/herdrdev/herdr-app), licensed under
+the Apache License 2.0 (LICENSE in this folder).
+
+Changes from the original: "Rename pane" (opens herdbook-rename), "Rename
+group", "Move to space…" (a list of the machine's other spaces and a new one)
+and an "agent" menu for agents-list rows. Moving uses pane.move / tab.move when
+Herdr has them with a space argument, else move.js parks the terminals and
+keeps them in the target space.

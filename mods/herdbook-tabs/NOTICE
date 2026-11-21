@@ -1,0 +1,10 @@
+herdbook-tabs is a modified copy of the `tabs` mod shipped with the Herdr
+desktop app 0.1.16 (https://github.com/herdrdev/herdr-app), licensed under
+the Apache License 2.0 (LICENSE in this folder).
+
+Changes from the original: a tab with several panes on screen lists each
+pane's icon and name (the terminal's `pane-name` label, else Herdr's label);
+a tab someone named shows all icons and its name. The naming moved to
+names.js (label() is Herdr's, unchanged). A right-click opens herdbook-menu
+when it's installed. Asset paths were renamed from mods/tabs/ to
+mods/herdbook-tabs/ by Herdr's mod.clone.

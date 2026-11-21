@@ -1,0 +1,11 @@
+herdbook-agents is a modified copy of the `agents` mod shipped with the Herdr
+desktop app 0.1.16 (https://github.com/herdrdev/herdr-app), licensed under
+the Apache License 2.0 (LICENSE in this folder).
+
+Changes from the original: in the grouped view each tab's agents sit in a
+rounded frame tinted with the space's color, with a header that folds it
+(kept in localStorage "groupsFolded") and renames the tab on double-click;
+spaces and agents order by their latest state change (groups.js); space
+headers carry the space's color tile; rows show the terminal's `pane-name`
+label; a right-click opens herdbook-menu when it's installed. The sort popup
+opens herdbook-agents instead of agents.
