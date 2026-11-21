@@ -11,6 +11,12 @@ import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { panes, props, run, theme, home, layout, terminals, spaces, openOverlay, appHome, readTextFile } from "herdr";
 
+// Cross-space drag, on Herdr builds that have it (not official Herdr): a named
+// import of a missing function would stop the mod loading, so look them up.
+import * as herdrAll from "herdr";
+const dragging = () => (typeof herdrAll.dragging === "function" ? herdrAll.dragging() : null);
+const startDrag = (spec) => { if (typeof herdrAll.startDrag === "function") herdrAll.startDrag(spec); };
+
 // Whether a mod is installed (readTextFile: fs/promises only reads under the home folder).
 const installed = (name) => readTextFile(`${appHome()}/mods/${name}/mod.json`).then((s) => s !== null, () => false);
 
@@ -69,6 +75,7 @@ export default class Pane extends View {
       .text_color(t.dim)
       .hover((s) => s.bg(t.hover).text_color(t.foreground))
       .when(Boolean(tip), (el) => el.tooltip(tip))
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .on_click((_e, cx) => {
         cx.stop_propagation();
         action();
@@ -102,7 +109,9 @@ export default class Pane extends View {
       .when(!bottom, el => el.border_b(1))
       .border_color(t.border)
       .text_size(12)
+      .when(dragging()?.pane === pane, el => el.opacity(0.6))
       .on_hover((hovered, cx) => { this.hovered = hovered; cx.notify(); })
+      .on_mouse_down("left", (e) => startDrag({ kind: "pane", pane, terminal: p.terminal, label: name, x: e.position.x, y: e.position.y }))
       .on_click((e) => {
         run("pane.focus", { pane });
         if (e.click_count === 2 && p.terminal && this.has.rename) {

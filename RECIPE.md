@@ -10,8 +10,9 @@ you can fold, rename or move to another space from a right-click.
 
 ## What you see
 
-The layout is Herdr's `main` with four blocks swapped; everything not listed
-here is Herdr's own.
+The layout is Herdr's `main` with five blocks swapped; everything not listed
+here is Herdr's own. `herdbook-spaces` is Herdr's spaces list with the right-click
+going to herdbook-menu and drop targets for drags (below).
 
 - **Tab bar** (`herdbook-tabs`, 30px, `chrome`). A tab with one pane on screen
   looks like Herdr's: icon, then its label (max 170px), the pane's given name
@@ -89,6 +90,14 @@ here is Herdr's own.
   The terminals keep running and keep their names. The target space is
   shown afterwards. If a step fails, the terminals go back to their own space
   and a toast says what failed.
+- Dragging, on a Herdr build that has `startDrag`, `dragging` and
+  `setDragSpace` (official 0.1.16 doesn't): press a pane header, an agent
+  row or a tab chip and drag. The source dims (0.6 for a header, 0.55 for a
+  row or chip); the space row or "+" under the pointer is reported with
+  `setDragSpace`; Herdr moves it on release. Tab chips also reorder along the
+  bar (`setDragTab`). Buttons inside the header and rows (move, split, zoom,
+  close, pin, fold) stop the press, so they never start a drag. Without those
+  functions none of this exists and nothing else changes.
 - Without `herdbook-menu`, right-clicks on headers and rows do nothing, the
   move button is gone, and the tab bar opens Herdr's `menu`. Without
   `herdbook-rename`, double-click does nothing and "Rename pane" is gone.
@@ -100,8 +109,9 @@ here is Herdr's own.
   `herdbook-tabs` for the tabs block and `herdbook-pane` as the tab block's
   `content.pane.header.content.mod`. Spaces, files, changes,
   workspace-chrome and workspace-status are Herdr's.
-- `herdbook-pane`, `herdbook-tabs`, `herdbook-agents`, `herdbook-menu`: Herdr's
-  `pane`, `tabs`, `agents` and `menu` cloned with `mod.clone`, Apache 2.0
+- `herdbook-pane`, `herdbook-tabs`, `herdbook-agents`, `herdbook-spaces`,
+  `herdbook-menu`: Herdr's `pane`, `tabs`, `agents`, `spaces` and `menu` cloned
+  with `mod.clone`, Apache 2.0
   (each has `LICENSE` and `NOTICE`). Pure logic sits in files without a
   `herdr` import so node can test them: `herdbook-tabs/names.js` (`chip`,
   `label`, `paneLabel`), `herdbook-agents/groups.js` (`groupedOrder`,
@@ -129,6 +139,9 @@ here is Herdr's own.
 
 ## Watch out
 
+- Drag functions exist only on some builds. Import them through `import * as`
+  and test `typeof … === "function"`: a named import of a missing function
+  stops the whole mod loading.
 - `fs/promises` `exists` refuses paths outside the home folder in a mod
   ("outside every granted read root"); `appHome()` can be elsewhere
   (`HERDR_APP_HOME`). Use `readTextFile`, which returns null for a missing
@@ -151,7 +164,8 @@ here is Herdr's own.
 
 ## Done when
 
-- `herdr-app check` passes for all five mods, and `tests/run.sh` passes.
+- `herdr-app check` passes for all six mods on official Herdr and on a build
+  with the drag functions, and `tests/run.sh` passes.
 - `hc label t3 pane-name=api` shows "api" in t3's pane header, its tab chip
   and its Agents row within a second; clearing it brings the program's name
   back.

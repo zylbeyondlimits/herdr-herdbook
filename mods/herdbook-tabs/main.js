@@ -3,6 +3,13 @@ import { h_flex, ScrollHandle } from "gpui-base";
 import { spaces, panes, terminals, run, openOverlay, theme, window, shared, layout, settings, appHome, readTextFile } from "herdr";
 import { chip } from "./names.js";
 
+// Cross-space drag, on Herdr builds that have it (not official Herdr): a named
+// import of a missing function would stop the mod loading, so look them up.
+import * as herdrAll from "herdr";
+const dragging = () => (typeof herdrAll.dragging === "function" ? herdrAll.dragging() : null);
+const startDrag = (spec) => { if (typeof herdrAll.startDrag === "function") herdrAll.startDrag(spec); };
+const setDragTab = (t) => { if (typeof herdrAll.setDragTab === "function") herdrAll.setDragTab(t); };
+
 // Whether a mod is installed (readTextFile: fs/promises only reads under the home folder).
 const installed = (name) => readTextFile(`${appHome()}/mods/${name}/mod.json`).then((s) => s !== null, () => false);
 
@@ -125,7 +132,16 @@ export default class Tabs extends View {
         .when(i <= active, el => el.on_size_change((_size, cx) => { this.scroll.scroll_to_item(active); cx.notify(); }))
         .border(1).border_color(c.active ? t.border : t.chrome).bg(c.active ? t.raised : t.chrome).text_color(c.active ? t.foreground : t.muted)
         .hover(s => s.bg(t.hover))
-        .on_mouse_down("left", (e, cx) => { cx.stop_propagation(); this.pressed = i; if (e.click_count === 2) run("tab.rename", { id: c.id }); })
+        .when(dragging()?.tab === c.id, el => el.opacity(0.55))
+        .on_mouse_down("left", (e, cx) => {
+          cx.stop_propagation(); this.pressed = i;
+          if (e.click_count === 2) run("tab.rename", { id: c.id });
+          else startDrag({ kind: "tab", tab: c.id, label: k.name, x: e.position.x, y: e.position.y });
+        })
+        .on_mouse_move((e) => {
+          const d = dragging();
+          if (d?.kind === "tab" && d.tab !== c.id && e.bounds) setDragTab({ tab: c.id, index: space.tabs.findIndex(x => x.id === c.id) + 1, x: e.bounds.x, y: e.bounds.y, width: e.bounds.width, height: e.bounds.height });
+        })
         .on_mouse_up("left", () => {
           const from = this.pressed; this.pressed = null;
           if (from !== null && from !== i) run("tab.move", { id: shown[from].id, index: space.tabs.findIndex(x => x.id === c.id) + 1 });

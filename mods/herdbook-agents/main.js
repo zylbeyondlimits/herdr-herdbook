@@ -9,6 +9,12 @@ import { v_flex, h_flex } from "gpui-base";
 import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, appHome, readTextFile } from "herdr";
 import { groupedOrder, frameName, paneNames } from "./groups.js";
 
+// Cross-space drag, on Herdr builds that have it (not official Herdr): a named
+// import of a missing function would stop the mod loading, so look them up.
+import * as herdrAll from "herdr";
+const dragging = () => (typeof herdrAll.dragging === "function" ? herdrAll.dragging() : null);
+const startDrag = (spec) => { if (typeof herdrAll.startDrag === "function") herdrAll.startDrag(spec); };
+
 // Whether a mod is installed (readTextFile: fs/promises only reads under the home folder).
 const installed = (name) => readTextFile(`${appHome()}/mods/${name}/mod.json`).then((s) => s !== null, () => false);
 
@@ -219,7 +225,9 @@ export default class Agents extends View {
       .items_center()
       .text_size(12.5)
       .when(on, (el) => el.bg(t.raised))
+      .when(dragging()?.terminal === k.address, (el) => el.opacity(0.55))
       .hover((s) => s.bg(t.hover))
+      .on_mouse_down("left", (e) => startDrag({ kind: "agent", pane: this.listed.has(k.address) ? panes().find((p) => p.terminal === k.address)?.pane : null, terminal: k.address, label: name, x: e.position.x, y: e.position.y }))
       .on_mouse_down("right", (_e, cx) => {
         cx.stop_propagation();
         this.menu("agent", { pane: panes().find((p) => p.terminal === k.address)?.pane ?? null, terminal: k.address, space: null, sub: true });
@@ -296,6 +304,7 @@ export default class Agents extends View {
         .text_color(open ? t.dim : (t[top] ?? t.dim))
         .cursor_pointer()
         .hover((s) => s.bg(t.hover).text_color(t.foreground))
+        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
         .on_click((_e, cx) => {
           cx.stop_propagation();
           open ? this.folded.add(a.address) : this.folded.delete(a.address);
@@ -336,6 +345,8 @@ export default class Agents extends View {
       const more = detail.get(a.address);
       // An agent on another machine (`vps/t7`) says which.
       const machine = a.address.includes("/") ? a.address.split("/")[0] : null;
+      const isDragging = dragging()?.terminal === a.address || dragging()?.pane === a.pane;
+      const drag = (e) => startDrag({ kind: "agent", pane: a.pane, terminal: a.address, label: `${a.program?.name || "Agent"} · ${label(a) || a.address}`, x: e.position.x, y: e.position.y });
       const openMenu = (_e, cx) => {
         cx.stop_propagation();
         this.menu("agent", { pane: a.pane, terminal: a.address, space: a.space, pinned: a.pinned });
@@ -348,7 +359,9 @@ export default class Agents extends View {
           .flex_none()
           .items_center()
           .gap(4)
+          .when(isDragging, (el) => el.opacity(0.55))
           .hover((s) => s.bg(t.hover))
+          .on_mouse_down("left", drag)
           .on_mouse_down("right", openMenu)
           .on_click(() => run("pane.focus", { pane: a.pane }))
           .child(div().flex_1().min_w(0).whitespace_nowrap().text_right().text_color(t.muted).child(String(i + 1)))
@@ -366,6 +379,7 @@ export default class Agents extends View {
         .cursor_pointer()
         .hover((s) => s.bg(t.hover).text_color(t.foreground))
         .tooltip(isPinned ? "Unpin" : "Pin to the top")
+        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
         .on_click((_e, cx) => {
           cx.stop_propagation();
           run("terminal.pin", { terminal: a.address, pinned: !isPinned });
@@ -394,10 +408,12 @@ export default class Agents extends View {
           else if (this.hovered === a.address) this.hovered = null;
           cx.notify();
         })
+        .when(isDragging, (el) => el.opacity(0.55))
+        .on_mouse_down("left", drag)
         .on_mouse_down("right", openMenu)
         .on_click(() => run("pane.focus", { pane: a.pane }))
         .when(Boolean(pic), el => el.child(div().id(`agent-fold-${a.address}`)
-          .when(subs.length > 0, el => el.on_click((_e, cx) => {
+          .when(subs.length > 0, el => el.on_mouse_down("left", (_e, cx) => cx.stop_propagation()).on_click((_e, cx) => {
             cx.stop_propagation();
             this.folded.has(a.address) ? this.folded.delete(a.address) : this.folded.add(a.address);
             cx.notify();
@@ -478,6 +494,7 @@ export default class Agents extends View {
       const chevron = div().id(`grp-f-${tab.id}`).flex_none().p(1).rounded(4).text_color(t.dim)
         .hover((s) => s.bg(t.hover).text_color(t.foreground))
         .tooltip(shut ? "Show panes" : "Fold panes")
+        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
         .on_click((_e, cx) => { cx.stop_propagation(); toggleGroup(tab.id, cx); })
         .child(svg(`mods/workspace-chrome/chevron-${shut ? "right" : "down"}.svg`).size(11));
       return v_flex().id(`grp-${tab.id}`).flex_none().my(3).p(2).rounded(10).border_1().border_color(spaceFill(space) + "59")

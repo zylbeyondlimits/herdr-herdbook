@@ -14,7 +14,10 @@ Name your panes and keep your tabs as groups in [Herdr](https://herdr.dev).
   to name it, or right-click for the tab menu. The space and the agent that
   changed last come first.
 - **Move to another space.** Right-click a pane, an agent or a tab → Move to
-  space…, or use the header's move button. The terminals keep running.
+  space…, or use the header's move button. The terminals keep running. On a
+  Herdr build with cross-space drag (not official Herdr yet), drag a pane
+  header, an agent row or a tab onto a space in the sidebar, or onto "+" for a
+  new one.
 
 Works on official Herdr 0.1.16 (tested on macOS). No network.
 
@@ -24,7 +27,7 @@ Tell your Herdr agent:
 
 > Add the Herdbook layout from github.com/zylbeyondlimits/herdr-herdbook
 
-It copies `layouts/herdbook.json` and the five `mods/herdbook-*` folders,
+It copies `layouts/herdbook.json` and the six `mods/herdbook-*` folders,
 merges `keys.json` (Alt-F2), and switches to the layout. Your own layout stays
 as it was: `ctrl-shift-l` switches back.
 
@@ -68,6 +71,6 @@ Herdbook 让你给 Herdr 里的每个 pane 起名字，并把 tab 当成分组�
 ## License
 
 MIT for `herdbook-rename`, the layout and the tests. `herdbook-pane`,
-`herdbook-tabs`, `herdbook-agents` and `herdbook-menu` are modified copies of
-Herdr's `pane`, `tabs`, `agents` and `menu` mods and stay under Apache 2.0 (see
+`herdbook-tabs`, `herdbook-agents`, `herdbook-spaces` and `herdbook-menu` are
+modified copies of Herdr's `pane`, `tabs`, `agents`, `spaces` and `menu` mods and stay under Apache 2.0 (see
 each folder's `LICENSE` and `NOTICE`).
