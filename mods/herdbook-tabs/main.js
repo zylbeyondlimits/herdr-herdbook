@@ -15,6 +15,16 @@ function find(node, id) {
   return null;
 }
 
+// Whether a usage-meter block sits right after this bar's block in a row.
+function usageBeside(node) {
+  const kids = node?.children ?? [];
+  if (node?.type === "row") {
+    const i = kids.findIndex(k => k.content?.mod === "herdbook-tabs");
+    if (i >= 0 && kids[i + 1]?.content?.mod === "usage-meter") return true;
+  }
+  return kids.some(usageBeside);
+}
+
 export default class Tabs extends View {
   init(_props, cx) {
     this.pressed = null;
@@ -148,7 +158,10 @@ export default class Tabs extends View {
           else { run("layout.select", { stack: "panel-body", child: id }); run("layout.show", { id: "panel" }); }
         }).child(svg(icon).size(14)).child(label);
     };
-    return h_flex().size_full().min_w(0).px(10).pl(lightsPadding).gap(3).items_center().bg(t.chrome).border_b(1).border_color(t.border)
+    // Usage Meter beside the bar: its block carries the bar's right edge, and the
+    // bar keeps the 3px its buttons keep between them.
+    const usageNext = usageBeside(root);
+    return h_flex().size_full().min_w(0).px(10).pl(lightsPadding).when(usageNext, el => el.pr(3)).gap(3).items_center().bg(t.chrome).border_b(1).border_color(t.border)
       .on_mouse_up("left", () => { this.pressed = null; })
       .on_scroll_wheel(e => this.wheel(e))
       .child(h_flex().id("tab-scroll").flex_1().min_w(0).h_full().items_center().gap(3).overflow_x_scrollbar().track_scroll(this.scroll)

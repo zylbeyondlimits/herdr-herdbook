@@ -6,5 +6,6 @@ Changes from the original: a tab with several panes on screen lists each
 pane's icon and name (the terminal's `pane-name` label, else Herdr's label);
 a tab someone named shows all icons and its name. The naming moved to
 names.js (label() is Herdr's, unchanged). A right-click opens herdbook-menu
-and + opens launch-menu, each when it's installed. Asset paths were renamed from mods/tabs/ to
+and + opens launch-menu, each when it's installed. With a usage-meter block right after it in a row, the bar ends with 3px
+instead of 10px. Asset paths were renamed from mods/tabs/ to
 mods/herdbook-tabs/ by Herdr's mod.clone.
