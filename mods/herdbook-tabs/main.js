@@ -13,6 +13,10 @@ import {
   isJsTarget,
   finishJsDrag,
   recentlyDragged,
+  createScrollState,
+  recordDragAnchor,
+  recordHoverIndex,
+  resetScrollAnchor,
   autoScrollOnDrag,
 } from "./drag.js";
 
@@ -30,7 +34,7 @@ function find(node, id) {
 export default class Tabs extends View {
   init(_props, cx) {
     this.scroll = ScrollHandle.new();
-    this.scrollState = { index: 0, lastAt: 0 };
+    this.scrollState = createScrollState();
     try { this.panels = JSON.parse(localStorage.getItem("panels") ?? "{}"); } catch { this.panels = {}; }
     if (!this.panels || typeof this.panels !== "object" || Array.isArray(this.panels)) this.panels = {};
     this.swipe = { acc: 0, steps: 0, at: 0, last: 0 };
@@ -121,6 +125,7 @@ export default class Tabs extends View {
         .when(dragNow?.pane === g.pane, (s) => s.opacity(0.5))
         .on_mouse_down("left", (e, cx) => {
           cx.stop_propagation();
+          recordDragAnchor(this.scrollState, e, i, now);
           if (e.click_count === 2) run("tab.rename", { id: c.id });
           else startModDrag(herdrAll, { kind: "pane", pane: g.pane, terminal: g.terminal, label: g.name, x: e.position.x, y: e.position.y }, now);
         })
@@ -153,11 +158,12 @@ export default class Tabs extends View {
         .when(dragNow?.tab === c.id, (el) => el.opacity(0.55))
         .on_mouse_down("left", (e, cx) => {
           cx.stop_propagation();
+          recordDragAnchor(this.scrollState, e, i, now);
           if (e.click_count === 2) run("tab.rename", { id: c.id });
           else startModDrag(herdrAll, { kind: "tab", tab: c.id, label: k.name, x: e.position.x, y: e.position.y }, now);
         })
         .on_mouse_move((e) => {
-          this.scrollState.index = i;
+          recordHoverIndex(this.scrollState, i, now);
           if (!dragNow) {
             trackDragMove(herdrAll, e, now);
             return;
@@ -252,17 +258,24 @@ export default class Tabs extends View {
       .on_scroll_wheel((e) => this.wheel(e))
       .child(
         h_flex()
-          .id("tab-scroll")
+          .id("tab-viewport")
           .flex_1()
           .min_w(0)
           .h_full()
-          .items_center()
-          .gap(3)
-          .overflow_x_scrollbar()
-          .track_scroll(this.scroll)
-          .on_size_change((_size, cx) => { if (active >= 0) { this.scroll.scroll_to_item(active); cx.notify(); } })
+          .on_scroll_wheel(() => resetScrollAnchor(this.scrollState))
           .on_mouse_move((e) => autoScrollOnDrag(herdrAll, this.scroll, this.scrollState, e, shown.length, true, Date.now()))
-          .children(shown.map(item)),
+          .child(
+            h_flex()
+              .id("tab-scroll")
+              .size_full()
+              .min_w(0)
+              .items_center()
+              .gap(3)
+              .overflow_x_scrollbar()
+              .track_scroll(this.scroll)
+              .on_size_change((_size, cx) => { if (!activeDrag(herdrAll) && active >= 0) { this.scroll.scroll_to_item(active); cx.notify(); } })
+              .children(shown.map(item)),
+          ),
       )
       .child(plusBtn)
       .when(enabled.includes("files"), (el) => el.child(panelButton("files", "Files", "mods/files/file.svg")))

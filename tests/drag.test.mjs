@@ -14,6 +14,10 @@ import {
   finishJsDrag,
   executeDrop,
   gapSlotIndex,
+  createScrollState,
+  recordDragAnchor,
+  recordHoverIndex,
+  resetScrollAnchor,
   autoScrollOnDrag,
 } from "./build/herdbook-agents/drag.mjs";
 
@@ -325,7 +329,49 @@ test("Route 1 (Native Herdr drag) & edge autoScrollOnDrag", () => {
 
   const scrolled = [];
   const scrollHandle = { scroll_to_item: (idx) => scrolled.push(idx) };
-  const scrollState = { index: 2, lastAt: 0 };
-  autoScrollOnDrag(nativeHost, scrollHandle, scrollState, { local_position: { x: 10, y: 190 }, bounds: { x: 0, y: 0, width: 200, height: 200 } }, 10, false, 500);
-  assert.deepEqual(scrolled, [4]);
+
+  // 1) Initial / wheel-scrolled state has index: null — NEVER jumps to item 0/2 when scrolled down!
+  const scrollState = createScrollState();
+  assert.equal(scrollState.index, null);
+  autoScrollOnDrag(
+    nativeHost,
+    scrollHandle,
+    scrollState,
+    { position: { x: 10, y: 590 }, local_position: { x: 10, y: 190 }, bounds: { x: 0, y: 400, width: 200, height: 200 } },
+    30,
+    false,
+    500,
+  );
+  assert.deepEqual(scrolled, [], "unanchored scroll state after trackpad wheel scroll must never jump to top");
+
+  // 2) Hovering row 2, then two-finger scrolling (resetScrollAnchor), then pressing Tab at row 22 near bottom edge:
+  recordHoverIndex(scrollState, 2, 510);
+  resetScrollAnchor(scrollState);
+  assert.equal(scrollState.index, null);
+  recordDragAnchor(scrollState, { position: { x: 20, y: 588 } }, 22, 520);
+  assert.equal(scrollState.index, 22);
+
+  // Small 5px jitter at press spot near bottom edge does NOT auto-scroll yet:
+  autoScrollOnDrag(
+    nativeHost,
+    scrollHandle,
+    scrollState,
+    { position: { x: 20, y: 593 }, local_position: { x: 20, y: 193 }, bounds: { x: 0, y: 400, width: 200, height: 200 } },
+    30,
+    false,
+    650,
+  );
+  assert.deepEqual(scrolled, [], "pressing/starting drag near viewport edge stays steady until deliberate edge travel");
+
+  // 3) Deliberate drag >=12px further into bottom edge steps cleanly from 22 -> 23 (never back to 0..4):
+  autoScrollOnDrag(
+    nativeHost,
+    scrollHandle,
+    scrollState,
+    { position: { x: 20, y: 602 }, local_position: { x: 20, y: 196 }, bounds: { x: 0, y: 400, width: 200, height: 200 } },
+    30,
+    false,
+    800,
+  );
+  assert.deepEqual(scrolled, [23]);
 });

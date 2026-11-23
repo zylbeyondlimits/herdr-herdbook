@@ -21,6 +21,10 @@ import {
   isJsTarget,
   finishJsDrag,
   recentlyDragged,
+  createScrollState,
+  recordDragAnchor,
+  recordHoverIndex,
+  resetScrollAnchor,
   autoScrollOnDrag,
 } from "./drag.js";
 
@@ -97,7 +101,8 @@ export default class Agents extends View {
   init(_props, cx) {
     if (props()?.sortMenu) return;
     this.scroll = ScrollHandle.new();
-    this.scrollState = { index: 0, lastAt: 0 };
+    this.scrollState = createScrollState();
+    this.lastSelfActionAt = 0;
     this.folded = new Set();
     try { this.changed = JSON.parse(localStorage.getItem("changed") ?? "{}"); } catch { this.changed = {}; }
     if (!this.changed || typeof this.changed !== "object" || Array.isArray(this.changed)) this.changed = {};
@@ -126,7 +131,13 @@ export default class Agents extends View {
     cx.timer.every(30000, (cx) => cx.notify());
   }
 
+  notePress(e, rowIndex, now = Date.now()) {
+    this.lastSelfActionAt = now;
+    recordDragAnchor(this.scrollState, e, rowIndex, now);
+  }
+
   menu(tab, target) {
+    this.lastSelfActionAt = Date.now();
     if (this.hasMenu) openOverlay({ mod: "herdbook-menu", kind: "popup", width: 228, height: 320, props: { tab, target } });
   }
 
@@ -234,9 +245,12 @@ export default class Agents extends View {
       .when(on, (el) => el.bg(t.raised))
       .when(dragNow?.terminal === k.address, (el) => el.opacity(0.55))
       .hover((el) => el.bg(t.hover))
-      .on_mouse_down("left", (e) => startModDrag(herdrAll, { kind: "agent", pane: ownPane, terminal: k.address, label: name, x: e.position.x, y: e.position.y }))
+      .on_mouse_down("left", (e) => {
+        this.notePress(e, rowIndex);
+        startModDrag(herdrAll, { kind: "agent", pane: ownPane, terminal: k.address, label: name, x: e.position.x, y: e.position.y });
+      })
       .on_mouse_move((e) => {
-        this.scrollState.index = rowIndex;
+        recordHoverIndex(this.scrollState, rowIndex);
         trackDragMove(herdrAll, e);
       })
       .on_mouse_down("right", (_e, cx) => {
@@ -244,6 +258,7 @@ export default class Agents extends View {
         this.menu("agent", { pane: ownPane, terminal: k.address, space: null, sub: true, isAgent: true });
       })
       .on_click(() => {
+        this.lastSelfActionAt = Date.now();
         if (recentlyDragged()) return;
         if (ownPane) run("pane.focus", { pane: ownPane });
         else this.peek(k.address);
@@ -325,9 +340,10 @@ export default class Agents extends View {
       .cursor_pointer()
       .hover((s) => s.bg(t.raised).text_color(t.foreground))
       .tooltip(tip)
-      .on_mouse_down("left", (_e, cx) => cancelModDrag(herdrAll, cx))
+      .on_mouse_down("left", (_e, cx) => { this.lastSelfActionAt = Date.now(); cancelModDrag(herdrAll, cx); })
       .on_click((_e, cx) => {
         cx.stop_propagation();
+        this.lastSelfActionAt = Date.now();
         if (!recentlyDragged()) action();
       })
       .child(svg("mods/workspace-chrome/plus.svg").size(11));
@@ -401,15 +417,19 @@ export default class Agents extends View {
       for (const a of list) if (detail.get(a.address) == null && seen[`${a.space_name}\u0000`] > 1) detail.set(a.address, label(a));
 
       const prioRow = (a, i, subs, rIdx) => {
+        if (a.pane === focusedPane) focusedRowAt = rIdx;
         const pic = icon(a.program, 16, t.foreground);
         const more = detail.get(a.address);
         const machine = a.address.includes("/") ? a.address.split("/")[0] : null;
         const isDragging = dragNow?.terminal === a.address || dragNow?.pane === a.pane;
         const targetKey = `row-${a.pane}`;
         const targeted = isJsTarget(herdrAll, targetKey, now);
-        const start = (e) => startModDrag(herdrAll, { kind: "agent", pane: a.pane, terminal: a.address, label: `${a.program?.name || "Agent"} · ${label(a) || a.address}`, x: e.position.x, y: e.position.y });
+        const start = (e) => {
+          this.notePress(e, rIdx, now);
+          startModDrag(herdrAll, { kind: "agent", pane: a.pane, terminal: a.address, label: `${a.program?.name || "Agent"} · ${label(a) || a.address}`, x: e.position.x, y: e.position.y }, now);
+        };
         const move = (e) => {
-          this.scrollState.index = rIdx;
+          recordHoverIndex(this.scrollState, rIdx, now);
           if (a.pane) reportDragTarget(herdrAll, e, { type: "group", key: targetKey, tab: a.tab, pane: a.pane, name: label(a) || a.program?.name || "pane" }, now);
         };
         const openMenu = (_e, cx) => {
@@ -423,7 +443,7 @@ export default class Agents extends View {
             .when(targeted, (el) => el.border_1().border_color(t.accent))
             .hover((s) => s.bg(t.hover))
             .on_mouse_down("left", start).on_mouse_move(move).on_mouse_down("right", openMenu)
-            .on_click(() => { if (!recentlyDragged()) run("pane.focus", { pane: a.pane }); })
+            .on_click(() => { this.lastSelfActionAt = Date.now(); if (!recentlyDragged()) run("pane.focus", { pane: a.pane }); })
             .child(div().flex_1().min_w(0).whitespace_nowrap().text_right().text_color(t.muted).child(String(i + 1)))
             .child(h_flex().w(14).flex_none().items_center().justify_center().child(this.status(t, a, true)));
         }
@@ -435,13 +455,14 @@ export default class Agents extends View {
           .when(targeted, (el) => el.border_1().border_color(t.accent).bg(t.hover))
           .cursor_pointer().hover((s) => s.bg(t.hover))
           .on_hover((on, cx) => {
-            if (on) this.hovered = a.address;
+            if (on) { this.hovered = a.address; recordHoverIndex(this.scrollState, rIdx); }
             else if (this.hovered === a.address) this.hovered = null;
             cx.notify();
           })
           .when(isDragging, (el) => el.opacity(0.55))
           .on_mouse_down("left", start).on_mouse_move(move).on_mouse_down("right", openMenu)
           .on_click((e) => {
+            this.lastSelfActionAt = Date.now();
             if (recentlyDragged()) return;
             if (e.click_count === 2) {
               if (this.hasRename) openOverlay({ mod: "herdbook-rename", kind: "dialog", width: 380, props: { target: { pane: a.pane, terminal: a.address } } });
@@ -544,16 +565,19 @@ export default class Agents extends View {
         const isDragging = (addr && dragNow?.terminal === addr) || dragNow?.pane === p.pane;
         const targetKey = `row-${p.pane}`;
         const targeted = isJsTarget(herdrAll, targetKey, now);
-        const start = (e) => startModDrag(herdrAll, {
-          kind: ag ? "agent" : "pane",
-          pane: p.pane,
-          terminal: addr,
-          label: `${p.program?.name || p.mod || "Pane"} · ${rowName}`,
-          x: e.position.x,
-          y: e.position.y,
-        });
+        const start = (e) => {
+          this.notePress(e, rIdx, now);
+          startModDrag(herdrAll, {
+            kind: ag ? "agent" : "pane",
+            pane: p.pane,
+            terminal: addr,
+            label: `${p.program?.name || p.mod || "Pane"} · ${rowName}`,
+            x: e.position.x,
+            y: e.position.y,
+          }, now);
+        };
         const move = (e) => {
-          this.scrollState.index = rIdx;
+          recordHoverIndex(this.scrollState, rIdx, now);
           reportDragTarget(herdrAll, e, { type: "group", key: targetKey, tab: tab.id, pane: p.pane, name: rowName }, now);
         };
         const openMenu = (_e, cx) => {
@@ -572,7 +596,7 @@ export default class Agents extends View {
               .when(targeted, (el) => el.border_1().border_color(t.accent))
               .hover((s) => s.bg(t.hover))
               .on_mouse_down("left", start).on_mouse_move(move).on_mouse_down("right", openMenu)
-              .on_click(() => { if (!recentlyDragged()) run("pane.focus", { pane: p.pane }); })
+              .on_click(() => { this.lastSelfActionAt = Date.now(); if (!recentlyDragged()) run("pane.focus", { pane: p.pane }); })
               .child(div().flex_1().min_w(0).whitespace_nowrap().text_right().text_color(p.focused ? t.foreground : t.muted).child(String(n)))
               .child(h_flex().w(14).flex_none().items_center().justify_center().child(this.status(t, ag ?? { status: p.status }, true))),
           ];
@@ -596,7 +620,7 @@ export default class Agents extends View {
           .cursor_pointer()
           .hover((s) => s.bg(t.hover))
           .on_hover((on, cx) => {
-            if (on) this.hovered = hoverId;
+            if (on) { this.hovered = hoverId; recordHoverIndex(this.scrollState, rIdx); }
             else if (this.hovered === hoverId) this.hovered = null;
             cx.notify();
           })
@@ -605,6 +629,7 @@ export default class Agents extends View {
           .on_mouse_move(move)
           .on_mouse_down("right", openMenu)
           .on_click((e) => {
+            this.lastSelfActionAt = Date.now();
             if (recentlyDragged()) return;
             if (e.click_count === 2) {
               if ((addr || hasPaneRename) && this.hasRename) {
@@ -619,8 +644,9 @@ export default class Agents extends View {
             }
           })
           .when(Boolean(pic), (el) => el.child(div().id(`pane-icon-${p.pane}`)
-            .when(subs.length > 0 && Boolean(addr), (el) => el.on_mouse_down("left", (_e, cx) => cancelModDrag(herdrAll, cx)).on_click((_e, cx) => {
+            .when(subs.length > 0 && Boolean(addr), (el) => el.on_mouse_down("left", (_e, cx) => { this.lastSelfActionAt = Date.now(); cancelModDrag(herdrAll, cx); }).on_click((_e, cx) => {
               cx.stop_propagation();
+              this.lastSelfActionAt = Date.now();
               this.folded.has(addr) ? this.folded.delete(addr) : this.folded.add(addr);
               cx.notify();
             })).child(pic)))
@@ -633,7 +659,7 @@ export default class Agents extends View {
           .when(Boolean(ag || p.status), (el) => el.child(this.status(t, ag ?? { status: p.status }, false)));
 
         if (!addr || this.folded.has(addr) || !subs.length) return [mainRow];
-        return [mainRow, ...subs.map((s, si) => this.subRow(t, s, shown, false, dragNow, panesNow, agentByAddr, rIdx + 1 + si))];
+        return [mainRow, ...subs.map((s) => this.subRow(t, s, shown, false, dragNow, panesNow, agentByAddr, rIdx))];
       };
 
       const tabFrame = (tab, space, inTab, rIdx) => {
@@ -657,8 +683,8 @@ export default class Agents extends View {
         const chevron = div().id(`grp-f-${tab.id}`).flex_none().p(1).rounded(4).text_color(t.dim)
           .hover((s) => s.bg(t.hover).text_color(t.foreground))
           .tooltip(shut ? "Show panes" : "Fold panes")
-          .on_mouse_down("left", (_e, cx) => cancelModDrag(herdrAll, cx))
-          .on_click((_e, cx) => { cx.stop_propagation(); toggleGroup(tab.id, cx); })
+          .on_mouse_down("left", (_e, cx) => { this.lastSelfActionAt = Date.now(); cancelModDrag(herdrAll, cx); })
+          .on_click((_e, cx) => { cx.stop_propagation(); this.lastSelfActionAt = Date.now(); toggleGroup(tab.id, cx); })
           .child(svg(`mods/workspace-chrome/chevron-${shut ? "right" : "down"}.svg`).size(11));
 
         return v_flex()
@@ -682,19 +708,23 @@ export default class Agents extends View {
             .text_color(name || shut ? t.foreground : t.dim)
             .hover((s) => s.bg(t.hover).text_color(t.foreground))
             .on_hover((on, cx) => {
-              if (on) this.hovered = grpHoverKey;
+              if (on) { this.hovered = grpHoverKey; recordHoverIndex(this.scrollState, rIdx); }
               else if (this.hovered === grpHoverKey) this.hovered = null;
               cx.notify();
             })
             .tooltip(name ? "Double-click to rename tab" : "Double-click to name this tab")
             .when(dragNow?.tab === tab.id, (el) => el.opacity(0.55))
-            .on_mouse_down("left", (e) => startModDrag(herdrAll, { kind: "tab", tab: tab.id, label: name ?? `${inTab.length} panes`, x: e.position.x, y: e.position.y }))
+            .on_mouse_down("left", (e) => {
+              this.notePress(e, rIdx, now);
+              startModDrag(herdrAll, { kind: "tab", tab: tab.id, label: name ?? `${inTab.length} panes`, x: e.position.x, y: e.position.y }, now);
+            })
             .on_mouse_move((e) => {
-              this.scrollState.index = rIdx;
+              recordHoverIndex(this.scrollState, rIdx, now);
               reportDragTarget(herdrAll, e, { type: "group", key: grpKey, tab: tab.id, name: name ?? `${inTab.length} panes` }, now);
             })
             .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.menu("tab", { id: tab.id, space: space.id }); })
             .on_click((e) => {
+              this.lastSelfActionAt = Date.now();
               if (recentlyDragged()) return;
               if (e.click_count === 2) run("tab.rename", { id: tab.id });
               else if (first) run("pane.focus", { pane: first.pane });
@@ -722,16 +752,14 @@ export default class Agents extends View {
       const gapRow = (spaceId, place, baseH, rIdx) => {
         const key = `gap-${spaceId}-${place.before ?? ""}-${place.after ?? ""}`;
         const targeted = isJsTarget(herdrAll, key, now);
-        const expanded = Boolean(dragNow);
         return h_flex()
           .id(key)
-          .h(expanded ? baseH + 6 : baseH)
-          .when(expanded, (el) => el.my(-3))
+          .h(baseH)
           .flex_none()
           .items_center()
           .px(4)
           .on_mouse_move((e) => {
-            this.scrollState.index = rIdx;
+            recordHoverIndex(this.scrollState, rIdx, now);
             reportDragTarget(herdrAll, e, { type: "gap", key, space: spaceId, ...place }, now);
           })
           .when(targeted, (el) => el.child(div().w_full().h(3).rounded(2).bg(t.accent)));
@@ -764,13 +792,16 @@ export default class Agents extends View {
           .cursor_pointer()
           .hover((s) => s.text_color(t.foreground).bg(t.hover))
           .on_hover((on, cx) => {
-            if (on) this.hovered = spHoverKey;
+            if (on) { this.hovered = spHoverKey; recordHoverIndex(this.scrollState, rIdx); }
             else if (this.hovered === spHoverKey) this.hovered = null;
             cx.notify();
           })
-          .on_mouse_down("left", (e) => startModDrag(herdrAll, { kind: "space", space: space.id, label: space.name, x: e.position.x, y: e.position.y }))
+          .on_mouse_down("left", (e) => {
+            this.notePress(e, rIdx, now);
+            startModDrag(herdrAll, { kind: "space", space: space.id, label: space.name, x: e.position.x, y: e.position.y }, now);
+          })
           .on_mouse_move((e) => {
-            this.scrollState.index = rIdx;
+            recordHoverIndex(this.scrollState, rIdx, now);
             if (dragNow?.kind === "space") {
               reportDragTarget(herdrAll, e, { type: "space-order", key: spOrderKey, space: space.id, index: spaceIndex + 1, name: space.name, machine: space.machine ?? null }, now);
             } else {
@@ -779,6 +810,7 @@ export default class Agents extends View {
           })
           .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.menu("space", { id: space.id }); })
           .on_click((_e, cx) => {
+            this.lastSelfActionAt = Date.now();
             if (recentlyDragged()) return;
             toggleSpace(space.id, cx);
           })
@@ -869,10 +901,16 @@ export default class Agents extends View {
       }
     }
 
-    if (!dragNow && focusedPane && (focusedPane !== this.revealedPane || focusedRowAt !== this.revealedRowAt)) {
+    // Only auto-scroll to reveal `focusedPane` when focus changed externally (e.g. from the tab bar,
+    // Spaces list, or keyboard), never when clicking, selecting, folding, or dragging inside this panel.
+    if (dragNow) this.lastDragSeenAt = now;
+    if (!dragNow && focusedPane && focusedPane !== this.revealedPane) {
+      const selfInitiated =
+        now - (this.lastSelfActionAt ?? 0) < 1500 ||
+        now - (this.lastDragSeenAt ?? 0) < 800 ||
+        recentlyDragged(now);
       this.revealedPane = focusedPane;
-      this.revealedRowAt = focusedRowAt;
-      if (focusedRowAt >= 0) this.scroll.scroll_to_item(focusedRowAt);
+      if (!selfInitiated && focusedRowAt >= 0) this.scroll.scroll_to_item(focusedRowAt);
     }
 
     const emptyPriority = byPriority && rawAgents.length === 0 && !collapsed;
@@ -889,6 +927,7 @@ export default class Agents extends View {
       .on_mouse_down_out(() => clearJsDrag(herdrAll))
       .on_mouse_move((e) => trackDragMove(herdrAll, e, now))
       .on_mouse_up("left", (e, cx) => {
+        this.lastSelfActionAt = Date.now();
         if (finishJsDrag(herdrAll, cx, null, Date.now(), e?.position)) cx.notify();
       })
       .when(!collapsed, (el) =>
@@ -923,16 +962,23 @@ export default class Agents extends View {
       )
       .child(
         v_flex()
-          .id("ag-list")
+          .id("ag-viewport")
           .flex_1()
           .min_h(0)
-          .pl(collapsed ? 0 : 8)
-          .pr(collapsed ? 0 : 14)
-          .overflow_y_scrollbar()
-          .mode("always")
-          .track_scroll(this.scroll)
+          .on_scroll_wheel(() => resetScrollAnchor(this.scrollState))
           .on_mouse_move((e) => autoScrollOnDrag(herdrAll, this.scroll, this.scrollState, e, rows.length, false, Date.now()))
-          .children(rows),
+          .child(
+            v_flex()
+              .id("ag-list")
+              .size_full()
+              .min_h(0)
+              .pl(collapsed ? 0 : 8)
+              .pr(collapsed ? 0 : 14)
+              .overflow_y_scrollbar()
+              .mode("always")
+              .track_scroll(this.scroll)
+              .children(rows),
+          ),
       )
       .when(collapsed, (el) =>
         el.child(

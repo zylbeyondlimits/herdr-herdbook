@@ -602,23 +602,58 @@ export function finishJsDrag(h, cx, targetOverride = null, now = Date.now(), rel
   return true;
 }
 
+export function createScrollState() {
+  return { index: null, downPos: null, lastAt: 0, updatedAt: 0 };
+}
+
+export function recordDragAnchor(state, e, index, now = Date.now()) {
+  if (!state) return;
+  if (typeof index === "number" && index >= 0) state.index = index;
+  if (e?.position) state.downPos = { x: e.position.x, y: e.position.y };
+  state.updatedAt = now;
+}
+
+export function recordHoverIndex(state, index, now = Date.now()) {
+  if (!state || typeof index !== "number" || index < 0) return;
+  state.index = index;
+  state.updatedAt = now;
+}
+
+export function resetScrollAnchor(state) {
+  if (!state) return;
+  state.index = null;
+  state.downPos = null;
+}
+
 // Edge auto-scroll helper for scrollable lists during an active drag.
+// Attach `on_mouse_move` to a non-scrolling outer viewport wrapper around the
+// `overflow_*_scrollbar()` element so `e.bounds` / `e.local_position` measure the
+// visible viewport rather than GPUI's full-height inner scrolled content box.
 export function autoScrollOnDrag(h, scrollHandle, state, e, count, horizontal = false, now = Date.now()) {
-  if (!scrollHandle || !count || !activeDrag(h, now)) return;
+  if (!scrollHandle || !count || !state || !activeDrag(h, now)) return;
+  if (typeof state.index !== "number" || state.index < 0 || state.index >= count) return;
   const local = e?.local_position;
   const bounds = e?.bounds;
   if (!local || !bounds) return;
   if (now - (state.lastAt ?? 0) < 95) return;
   const pos = horizontal ? local.x : local.y;
   const span = horizontal ? bounds.width : bounds.height;
-  const margin = horizontal ? 36 : 28;
-  if (span <= margin * 2) return;
+  const margin = horizontal ? 32 : 24;
+  if (span <= margin * 2.5) return;
   let dir = 0;
   if (pos >= 0 && pos < margin) dir = -1;
   else if (pos <= span && pos > span - margin) dir = 1;
   if (!dir) return;
-  const cur = Math.max(0, Math.min(count - 1, state.index ?? (dir > 0 ? 0 : count - 1)));
-  const next = Math.max(0, Math.min(count - 1, cur + dir * 2));
+  // Require deliberate pointer travel toward that edge from the initial press point
+  // so pressing/selecting an item near the top or bottom edge never jumps the scroll.
+  const worldPos = horizontal ? e?.position?.x : e?.position?.y;
+  const downAxis = horizontal ? state.downPos?.x : state.downPos?.y;
+  if (typeof worldPos === "number" && typeof downAxis === "number") {
+    if (dir < 0 && worldPos > downAxis - 12) return;
+    if (dir > 0 && worldPos < downAxis + 12) return;
+  }
+  const next = Math.max(0, Math.min(count - 1, state.index + dir));
+  if (next === state.index) return;
   state.index = next;
   state.lastAt = now;
   scrollHandle.scroll_to_item(next);

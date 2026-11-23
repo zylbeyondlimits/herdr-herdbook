@@ -17,6 +17,10 @@ import {
   isJsTarget,
   finishJsDrag,
   recentlyDragged,
+  createScrollState,
+  recordDragAnchor,
+  recordHoverIndex,
+  resetScrollAnchor,
   autoScrollOnDrag,
 } from "./drag.js";
 
@@ -75,7 +79,8 @@ export default class Spaces extends View {
     this.born = {};
     this.menuMod = "menu";
     this.scroll = ScrollHandle.new();
-    this.scrollState = { index: 0, lastAt: 0 };
+    this.scrollState = createScrollState();
+    this.lastSelfActionAt = 0;
     this.activeAt = -1;
     this.machines = [];
     try {
@@ -479,10 +484,12 @@ export default class Spaces extends View {
           .when(fromIdx > i, (line) => line.top(0)),
       ))
       .on_mouse_down("left", (e) => {
+        this.lastSelfActionAt = now;
+        recordDragAnchor(this.scrollState, e, itemIdx, now);
         startModDrag(herdrAll, { kind: "space", space: w.id, label: w.name, x: e.position.x, y: e.position.y }, now);
       })
       .on_mouse_move((e) => {
-        this.scrollState.index = itemIdx;
+        recordHoverIndex(this.scrollState, itemIdx, now);
         if (!dragNow) {
           trackDragMove(herdrAll, e, now);
           return;
@@ -494,6 +501,7 @@ export default class Spaces extends View {
         }
       })
       .on_click(() => {
+        this.lastSelfActionAt = Date.now();
         if (!recentlyDragged()) run("space.select", { id: w.id });
       })
       .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.menu(w); })
@@ -527,9 +535,13 @@ export default class Spaces extends View {
       .when(!w.active, (el) => el.hover((s) => s.bg(t.hover)))
       .when(isDraggingThis, (el) => el.opacity(0.5))
       .when(dropTargeted || orderTargeted, (el) => el.border_1().border_color(t.accent))
-      .on_mouse_down("left", (e) => startModDrag(herdrAll, { kind: "space", space: w.id, label: w.name, x: e.position.x, y: e.position.y }, now))
+      .on_mouse_down("left", (e) => {
+        this.lastSelfActionAt = now;
+        recordDragAnchor(this.scrollState, e, itemIdx, now);
+        startModDrag(herdrAll, { kind: "space", space: w.id, label: w.name, x: e.position.x, y: e.position.y }, now);
+      })
       .on_mouse_move((e) => {
-        this.scrollState.index = itemIdx;
+        recordHoverIndex(this.scrollState, itemIdx, now);
         if (!dragNow) {
           trackDragMove(herdrAll, e, now);
           return;
@@ -541,7 +553,7 @@ export default class Spaces extends View {
         }
       })
       .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.menu(w); })
-      .on_click(() => { if (!recentlyDragged()) run("space.select", { id: w.id }); })
+      .on_click(() => { this.lastSelfActionAt = Date.now(); if (!recentlyDragged()) run("space.select", { id: w.id }); })
       .child(div().text_color(w.active ? t.foreground : t.muted).child(String(i + 1)))
       .child(div().absolute().right(5).text_color(tone(t, w.status)).child(glyph(w.status))));
   }
@@ -565,10 +577,14 @@ export default class Spaces extends View {
     if (changed) setShared("space.colors", kept);
     const list = this.grouped(t, collapsed, dragNow, now);
     const active = sp.find((p) => p.active)?.id;
-    if (active !== this.revealed || this.activeAt !== this.revealedAt) {
+    if (dragNow) this.lastDragSeenAt = now;
+    if (!dragNow && active !== this.revealed) {
+      const selfInitiated =
+        now - (this.lastSelfActionAt ?? 0) < 1500 ||
+        now - (this.lastDragSeenAt ?? 0) < 800 ||
+        recentlyDragged(now);
       this.revealed = active;
-      this.revealedAt = this.activeAt;
-      if (this.activeAt >= 0) this.scroll.scroll_to_item(this.activeAt);
+      if (!selfInitiated && this.activeAt >= 0) this.scroll.scroll_to_item(this.activeAt);
     }
     const newKey = "sp-new-top";
     const newTargeted = isJsTarget(herdrAll, newKey, now);
@@ -581,6 +597,7 @@ export default class Spaces extends View {
       .on_mouse_down_out(() => clearJsDrag(herdrAll))
       .on_mouse_move((e) => trackDragMove(herdrAll, e, now))
       .on_mouse_up("left", (e, cx) => {
+        this.lastSelfActionAt = Date.now();
         if (finishJsDrag(herdrAll, cx, null, Date.now(), e?.position)) cx.notify();
       })
       .child(h_flex().h(31).pl(16).pr(10).items_center().justify_between().text_size(11.5).text_color(t.dim)
@@ -599,17 +616,24 @@ export default class Spaces extends View {
           .child(svg("mods/workspace-chrome/plus.svg").size(14))))
       .child(
         v_flex()
-          .id("space-list")
+          .id("space-viewport")
           .flex_1()
           .min_h(0)
-          .px(collapsed ? 0 : 8)
-          .pb(14)
-          .overflow_y_scrollbar()
-          .mode("always")
-          .track_scroll(this.scroll)
-          .on_size_change((_size, cx) => { if (this.activeAt >= 0) { this.scroll.scroll_to_item(this.activeAt); cx.notify(); } })
+          .on_scroll_wheel(() => resetScrollAnchor(this.scrollState))
           .on_mouse_move((e) => autoScrollOnDrag(herdrAll, this.scroll, this.scrollState, e, list.length, false, Date.now()))
-          .children(list),
+          .child(
+            v_flex()
+              .id("space-list")
+              .size_full()
+              .min_h(0)
+              .px(collapsed ? 0 : 8)
+              .pb(14)
+              .overflow_y_scrollbar()
+              .mode("always")
+              .track_scroll(this.scroll)
+              .on_size_change((_size, cx) => { if (!activeDrag(herdrAll) && this.activeAt >= 0) { this.scroll.scroll_to_item(this.activeAt); cx.notify(); } })
+              .children(list),
+          ),
       );
   }
 }
