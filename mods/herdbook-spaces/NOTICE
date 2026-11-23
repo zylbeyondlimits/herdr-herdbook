@@ -2,8 +2,8 @@ herdbook-spaces is a modified copy of the `spaces` mod shipped with the Herdr
 desktop app 0.1.16 (https://github.com/herdrdev/herdr-app), licensed under
 the Apache License 2.0 (LICENSE in this folder).
 
-Changes from the original: a right-click opens herdbook-menu when it's
-installed; on a Herdr build with cross-space drag functions (startDrag,
-dragging, setDragSpace) it reports the space row or "+" under a drag with
-setDragSpace. Without those functions it behaves as Herdr's spaces. Asset
-paths were renamed by Herdr's mod.clone.
+Changes from the original: preserves manual workspace drag order after one-time
+worktree placement, opens herdbook-menu on right-click when installed, and
+supports native + pure-JS cross-space drag/drop (`drag.js`) for reordering
+workspaces and dropping panes or tabs onto workspaces or `+`. Asset paths were
+renamed by Herdr's mod.clone.

@@ -62,7 +62,7 @@ export async function moveTerminals(api, spec) {
     if (!(await until(api, () => made() && api.focused()?.space === made().id, timeout))) return restore("Couldn't make the new space");
     space = made().id;
     extraTab = made().tabs?.[0]?.id ?? null;
-  } else {
+  } else if (api.focused()?.space !== target) {
     api.run("space.select", { id: target });
     if (!(await until(api, () => api.focused()?.space === target, timeout))) return restore("Couldn't show that space");
   }

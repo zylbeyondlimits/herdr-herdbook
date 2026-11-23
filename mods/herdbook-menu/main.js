@@ -8,6 +8,7 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, focused, exec, shared, commands, notify, appHome, readTextFile } from "herdr";
+import * as herdrAll from "herdr";
 import { moveTerminals } from "./move.js";
 
 // Whether a mod is installed (readTextFile: fs/promises only reads under the home folder).
@@ -35,6 +36,7 @@ async function checkout(folder, on) {
 
 const spaceOfTab = (tab) => spaces().find((s) => (s.tabs ?? []).some((t) => t.id === tab)) ?? null;
 const paneOf = (tg) => panes().find((p) => (tg.pane && p.pane === tg.pane) || (tg.terminal && p.terminal === tg.terminal)) ?? null;
+const machineOfId = (id) => (id && id.includes("/") ? id.split("/")[0] : null);
 
 // The space a target is in now: given, its tab's, or its pane's.
 function spaceOf(tg) {
@@ -50,10 +52,22 @@ function terminalsOf(tg) {
   return addr ? [addr] : [];
 }
 
+// Moves with Herdr's own commands when it has them (a build with pane.move
+// and tab.move's space), else parks and keeps the terminals (move.js).
+function nativeMove() {
+  const args = (name) => commands().find((c) => c.name === name)?.args?.map((a) => a.name) ?? [];
+  return args("pane.move").includes("space") && args("tab.move").includes("space");
+}
+
+function hasPaneRenameCmd() {
+  return commands().some((c) => c.name === "pane.rename");
+}
+
 // Spaces on the target's machine it isn't in, then a new one.
 function moveItems(tg) {
   const from = spaceOf(tg);
-  const machine = from ? from.machine ?? null : null;
+  const addr = tg.terminal ?? paneOf(tg)?.terminal ?? null;
+  const machine = from ? (from.machine ?? null) : (machineOfId(addr) ?? machineOfId(tg.pane) ?? machineOfId(tg.id));
   const others = spaces().filter((s) => (s.machine ?? null) === machine && s.id !== from?.id);
   const colors = shared("space.colors") ?? {};
   return [
@@ -66,7 +80,10 @@ function items(p, git, sub, can) {
   if (sub) return moveItems(sub);
   p = p ?? {};
   const tg = p.target ?? {};
+  const hasPaneRename = hasPaneRenameCmd();
+  const hasNativeMove = nativeMove();
   const rename = (label, target) => [label, RENAME_PANE, { target }, { icon: "mods/workspace-chrome/square-pen.svg" }];
+  const nativeRename = (label, pane) => [label, "pane.rename", { pane }, { icon: "mods/workspace-chrome/square-pen.svg" }];
   const move = (target) => [`Move to space…`, SUBMENU, target, { submenu: true }];
   switch (p.tab) {
     case "move-space":
@@ -88,8 +105,10 @@ function items(p, git, sub, can) {
               ["Split right", "pane.split", { direction: "right", pane: tg.pane }],
               ["Split down", "pane.split", { direction: "down", pane: tg.pane }],
               ["Zoom", "pane.zoom", { pane: tg.pane }],
-              ...(addr && can.rename ? [rename("Rename pane", { pane: tg.pane, terminal: addr })] : []),
-              ...(addr ? [move({ kind: "pane", pane: tg.pane, terminal: addr })] : []),
+              ...((addr || hasPaneRename) && can.rename
+                ? [rename("Rename pane", { pane: tg.pane, terminal: addr })]
+                : hasPaneRename ? [nativeRename("Rename pane", tg.pane)] : []),
+              ...(addr || hasNativeMove ? [move({ kind: "pane", pane: tg.pane, terminal: addr })] : []),
             ]
           : []),
         ...(term
@@ -103,15 +122,17 @@ function items(p, git, sub, can) {
         ...(own ? [["Close pane", "pane.close", { pane: tg.pane }]] : []),
       ];
     }
-    // An agents-list row: target { pane, terminal, space?, pinned?, sub? }.
+    // A sidebar row: target { pane, terminal, space?, pinned?, sub?, isAgent? }.
     case "agent": {
-      // The tab it's in: the group the agents list frames it in.
-      const group = tg.pane ? panes().find((x) => x.pane === tg.pane)?.tab ?? null : null;
+      // The tab it's in: the tab frame shown in the sidebar.
+      const tabId = tg.pane ? panes().find((x) => x.pane === tg.pane)?.tab ?? null : null;
       return [
-        ...(tg.terminal && can.rename ? [rename(tg.pane ? "Rename pane" : "Rename", { pane: tg.pane, terminal: tg.terminal })] : []),
-        ...(group ? [["Rename group", "tab.rename", { id: group }]] : []),
-        ...(tg.pane && tg.terminal ? [move({ kind: "pane", pane: tg.pane, terminal: tg.terminal, space: tg.space })] : []),
-        ...(!tg.sub && tg.terminal
+        ...((tg.terminal || (tg.pane && hasPaneRename)) && can.rename
+          ? [rename(tg.pane ? "Rename pane" : "Rename", { pane: tg.pane, terminal: tg.terminal })]
+          : tg.pane && hasPaneRename ? [nativeRename("Rename pane", tg.pane)] : []),
+        ...(tabId ? [["Rename tab", "tab.rename", { id: tabId }]] : []),
+        ...(tg.pane && (tg.terminal || hasNativeMove) ? [move({ kind: "pane", pane: tg.pane, terminal: tg.terminal, space: tg.space })] : []),
+        ...(!tg.sub && tg.terminal && tg.isAgent !== false
           ? [[tg.pinned ? "Unpin agent" : "Pin to top", "terminal.pin", { terminal: tg.terminal, pinned: !tg.pinned }, { icon: `mods/workspace-chrome/${tg.pinned ? "pin-off" : "pin"}.svg` }]]
           : []),
         ...(tg.sub && !tg.pane && tg.terminal ? [["Open as tab", "terminal.keep", { terminal: tg.terminal }]] : []),
@@ -123,7 +144,7 @@ function items(p, git, sub, can) {
     case "tab":
       return [
         ["Rename", "tab.rename", { id: tg.id }],
-        ...(terminalsOf({ kind: "tab", id: tg.id }).length ? [move({ kind: "tab", id: tg.id, space: tg.space })] : []),
+        ...(terminalsOf({ kind: "tab", id: tg.id }).length || hasNativeMove ? [move({ kind: "tab", id: tg.id, space: tg.space })] : []),
         ["New tab", "tab.new", { space: tg.space }],
         ["Close", "tab.close", { id: tg.id }],
       ];
@@ -162,13 +183,6 @@ function shortcut(name, args) {
   return k ? k.keys : "";
 }
 
-// Moves with Herdr's own commands when it has them (a build with pane.move
-// and tab.move's space), else parks and keeps the terminals (move.js).
-function nativeMove() {
-  const args = (name) => commands().find((c) => c.name === name)?.args?.map((a) => a.name) ?? [];
-  return args("pane.move").includes("space") && args("tab.move").includes("space");
-}
-
 export default class Menu extends View {
   init(_props, cx) {
     this.at = 0;
@@ -178,6 +192,7 @@ export default class Menu extends View {
     this.can = { rename: false };
     this.handle = cx.focus_handle();
     this.handle.focus();
+    if (typeof herdrAll.checking === "function" && herdrAll.checking()) return;
     const p = props();
     const space = p?.tab === "space" && spaces().find((s) => s.id === p.target?.id);
     const folder = space && place(space);
@@ -193,12 +208,20 @@ export default class Menu extends View {
     const overlay = props()?.overlay;
     if (nativeMove()) {
       closeOverlay(overlay);
-      if (tg.kind === "tab") run("tab.move", { id: tg.id, space: spec.space });
-      else run("pane.move", { pane: tg.pane ?? null, terminal: tg.terminal ?? null, space: spec.space });
+      if (tg.kind === "tab") {
+        run("tab.move", { id: tg.id, space: spec.space });
+      } else {
+        const moveArgs = { space: spec.space };
+        if (tg.pane) moveArgs.pane = tg.pane;
+        if (tg.terminal) moveArgs.terminal = tg.terminal;
+        run("pane.move", moveArgs);
+      }
       return;
     }
     const addrs = terminalsOf(tg);
     const from = spaceOf(tg);
+    const addr0 = addrs[0] ?? tg.terminal ?? null;
+    const machine = from ? (from.machine ?? null) : machineOfId(addr0);
     const lead = panes().find((p) => addrs.includes(p.terminal) && p.cwd);
     const tab = tg.kind === "tab" ? from?.tabs?.find((t) => t.id === tg.id) : null;
     // Closing the overlay ends this copy and its tasks: hide the menu instead
@@ -212,7 +235,7 @@ export default class Menu extends View {
           addrs,
           space: spec.space,
           folder: lead?.cwd ?? null,
-          machine: from?.machine ?? null,
+          machine,
           tabName: tab?.named ? tab.name : null,
         });
         if (!r.ok) notify({ title: "Couldn't move", body: r.error, level: "error" });

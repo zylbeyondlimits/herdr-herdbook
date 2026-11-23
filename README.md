@@ -1,25 +1,21 @@
 # Herdbook
 
-Name your panes and keep your tabs as groups in [Herdr](https://herdr.dev).
+Visual **Workspace → Tab → Pane** management, persistent pane naming, and full cross-panel drag-and-drop for GUI users of [Herdr](https://herdr.dev).
 
 ![Herdbook](preview.png)
 
-- **Pane names.** Double-click a pane header, right-click → Rename pane, or
-  press Alt-F2. The name shows in the pane header, the tab bar and the
-  Agents list, and stays with the terminal through restarts and moves.
-- **Tab chips that list their panes.** A tab with several panes shows each
-  pane's icon and name; a tab you named shows its name and every icon.
-- **Groups in the Agents list.** In "Grouped by space", each tab's agents sit
-  in one frame tinted with the space's color. Fold a frame, double-click it
-  to name it, or right-click for the tab menu. The space and the agent that
-  changed last come first.
-- **Move to another space.** Right-click a pane, an agent or a tab → Move to
-  space…, or use the header's move button. The terminals keep running. On a
-  Herdr build with cross-space drag (not official Herdr yet), drag a pane
-  header, an agent row or a tab onto a space in the sidebar, or onto "+" for a
-  new one.
+- **Three clear layers (`Workspace → Tab → Pane`).**
+  - **Pane:** every terminal (`zsh`, `nvim`, scripts), coding agent CLI (`Claude Code`, `Codex`, etc.), or mod pane. Double-click a pane header or sidebar row, right-click → **Rename pane**, or press `Alt-F2` to give it a persistent `pane-name` label that survives restarts and cross-space moves—with automatic forward compatibility for Herdr 0.1.17's native `pane.rename` (`panes()[i].name` / `agents()[i].pane_name`, including non-terminal mod panes).
+  - **Tab:** one or more panes sharing the screen together. Shown as a pill in the top bar (listing every pane's icon and name) and as a space-tinted rounded card in the sidebar **Agents** tree (foldable, double-click to rename, hover `+` to split a new pane right, right-click for tab actions).
+  - **Workspace:** a collection of tabs in **Spaces** and in the **Agents** tree, in fixed structural order that stays right where you drag it, with a hover `+` button on workspace headers to open a new tab (or Launch Menu when active).
+- **Full tree + Priority view in `Agents`.** Switch between **Grouped by workspace** (every workspace, tab frame, and pane—including plain shells and mod panes—plus sub-agent trees) and **Priority** (status-reporting agents ordered by `Needs you → Done → Working → Idle`).
+- **Drag and drop everywhere (mouse & trackpad).** Works out of the box on **official Herdr 0.1.16+** (pure-JS cross-panel drag fallback) and automatically upgrades to floating drag cards + 4-edge main-screen split previews on Herdr builds with native drag APIs:
+  - Drag any **Pane** (from a pane header, any top-bar tab's pane icon/name—including the active tab—or any sidebar row) onto another **Pane** (on official Herdr, its `30px` header bar; on native-drag builds, any pane edge/center), onto a **Tab** pill or sidebar **Tab** header to join it, into the **gap** between tabs (or top-bar `+`) to split it into its own tab, or onto any **Workspace** (or `+`) to move it across workspaces on the same machine.
+  - Drag any **Tab** (top-bar pill or sidebar tab header) to reorder tabs, place between tabs in another workspace, or move the whole tab to another/new workspace.
+  - Drag any **Workspace** row or header to reorder workspaces within its machine.
+  - **Trackpad-friendly:** expanded gap hit zones while dragging, stale-drag auto-cleanup, and automatic edge scrolling on long lists.
 
-Works on official Herdr 0.1.16 (tested on macOS). No network.
+Works on official Herdr 0.1.16+ (macOS, Linux, Windows). No network.
 
 ## Install
 
@@ -27,50 +23,65 @@ Tell your Herdr agent:
 
 > Add the Herdbook layout from github.com/zylbeyondlimits/herdr-herdbook
 
-It copies `layouts/herdbook.json` and the six `mods/herdbook-*` folders,
-merges `keys.json` (Alt-F2), and switches to the layout. Your own layout stays
-as it was: `ctrl-shift-l` switches back.
+It copies `layouts/herdbook.json` and the six `mods/herdbook-*` folders into `~/.config/herdr-app`, merges `keys.json` (`Alt-F2` → `mod.open:herdbook-rename`), checks each mod, and switches to `herdbook`.
 
-With [Launch Menu](https://github.com/zylbeyondlimits/herdr-launch-menu)
-installed, the tab bar's + opens it instead of Herdr's menu.
+- **Non-destructive layout switch:** your own layout (`main` or any custom layout) is untouched—press **`Ctrl+Shift+L`** anytime to cycle between Herdbook and your other layouts.
+- **Standalone / modular use:** every mod degrades gracefully on its own. You can drop `herdbook-agents`, `herdbook-tabs`, `herdbook-spaces`, or `herdbook-pane` individually into your own layout JSON, set `"terminal_menu": "herdbook-menu"` on the layout root, and add `herdbook-rename` for the rename dialog.
 
-Only want part of it? Each mod works alone. Put `herdbook-agents`,
-`herdbook-tabs` or `herdbook-pane` in your own layout's agents block, tab
-block or pane header, and set `"terminal_menu": "herdbook-menu"` for the
-right-click menu. Copy `herdbook-rename` (and `herdbook-menu` for moving) to
-get the rename and move entries; without them those entries don't show.
+## Co-existence in `tabs-row` (Frost, Usage Meter & Launch Menu)
+
+- **Launch Menu:** when [Launch Menu](https://github.com/zylbeyondlimits/herdr-launch-menu) (`mods/launch-menu`) is installed, `herdbook-tabs`'s `+` button and the active workspace header's hover `+` automatically open `launch-menu` instead of `new-menu`.
+- **Frost & Usage Meter:** replace the `"tabs"` block in `layouts/herdbook.json` with a `"tabs-row"` row to mount inline toolbar buttons beside `herdbook-tabs`. `herdbook-tabs` automatically tightens its right padding to `3px` whenever any visible sibling block sits after it in the row:
+
+```json
+{
+  "id": "tabs-row",
+  "type": "row",
+  "size": { "px": 42 },
+  "resizable": false,
+  "window_drag": true,
+  "children": [
+    { "id": "tabs", "type": "block", "size": { "weight": 1 }, "content": { "mod": "herdbook-tabs" } },
+    { "id": "frost", "type": "block", "size": { "px": 68 }, "content": { "mod": "frost", "props": { "block": "frost" } } },
+    { "id": "usage", "type": "block", "size": { "px": 78 }, "content": { "mod": "usage-meter", "props": { "block": "usage" } } }
+  ]
+}
+```
 
 ## What it touches
 
-- Writes one terminal label, `pane-name`, with `hc label`. Clear one with
-  `hc label t3 pane-name=`.
-- Runs `git rev-parse` in a space's folder for the worktree menu items, as
-  Herdr's own menu does.
-- Reads only its own mods' `mod.json` to see which are installed.
-
-Moving on official Herdr parks the terminals and keeps them in the other
-space. A moved tab's panes land side by side: its split layout isn't kept.
+- Writes one terminal label, `pane-name`, via `hc label <terminal> pane-name=<name>` (clear with `hc label t3 pane-name=`), plus `pane.rename` when Herdr 0.1.17+ exposes it.
+- Uses `shared("herdbook.drag")` transiently during active pointer drags on official Herdr builds without native `startDrag`.
+- Runs `git rev-parse` in a space's folder for git status and worktree menu items, matching Herdr's shipped `spaces` and `menu` mods.
+- Reads only `mod.json` under `appHome()/mods/` via `readTextFile` to detect optional sibling mods (`herdbook-menu`, `herdbook-rename`, `launch-menu`).
 
 ## Tests
 
 ```sh
-tests/run.sh
+./tests/run.sh
 ```
+
+(If editing `mods/herdbook-agents/drag.js`, run `./scripts/sync-drag.sh` first so all four self-contained mod copies stay byte-for-byte identical; `./tests/run.sh` asserts sync parity.)
 
 ## 中文说明
 
-Herdbook 让你给 Herdr 里的每个 pane 起名字，并把 tab 当成分组来整理。
+面向喜欢**图形化界面（GUI）与鼠标/触控板直觉操作**的 Herdr 用户，将窗口整理为清晰的 **`Workspace → Tab → Pane`** 三层结构，并支持跨侧边栏、顶栏、主屏自由拖拽移动：
 
-- 起名：双击 pane 标题栏、右键 Rename pane，或者按 Alt-F2。名字会同时显示在 pane 标题栏、顶栏 tab 和 Agents 列表里，重启或移动后也不会丢。
-- 顶栏：有多个 pane 的 tab 会列出每个 pane 的图标和名字；你命名过的 tab 显示 tab 名和所有图标。
-- Agents 列表的「Grouped by space」视图里，每个 tab 的 agent 放在一个带 space 颜色的圆角框里，可以折叠、双击改名、右键打开菜单。最近有状态变化的 space 和 agent 排在最前。
-- 右键 pane、agent 或 tab，选 Move to space… 可以移到别的 space，终端不会中断。
+- **Pane（面板）**：每个终端（`zsh`、`nvim`）、运行中的 Agent CLI 或 Mod 面板。双击标题栏/侧栏行、右键 **Rename pane** 或按 `Alt-F2` 即可写入持久化 `pane-name` 标签（跨工作区迁移与重启均保留），并前向兼容 Herdr 0.1.17 原生 `pane.rename`。
+- **Tab（标签页）**：同屏分屏显示的 1~N 个 Pane 的聚合。顶栏胶囊显示每个分屏图标与名称；左侧 **Agents** 面板的「Grouped by workspace」视图将其展示为带工作区主题色的圆角卡片框（支持普通终端显示、折叠、双击改名、悬停 `+` 快速向右分屏、固定顺序不乱跳；右上角可随时切回 **Priority** 视图）。
+- **全区域鼠标/触控板拖拽（双引擎兼容）**：官方版 Herdr 0.1.16+ 开箱即用，支持在 Spaces、Agents、顶栏与 Pane 标题栏之间互拖合并、拆成独立 Tab、排序或同机跨 Workspace 迁移；随时可按 `Ctrl+Shift+L` 无损切回原布局，也能在 `tabs-row` 中与 Frost、Usage Meter、Launch Menu 无缝共存。
 
 安装时对你的 Herdr agent 说：「Add the Herdbook layout from github.com/zylbeyondlimits/herdr-herdbook」。
 
+## Related Mods
+
+| Mod / Layout | Description |
+|---|---|
+| [herdr-herdbook](https://github.com/zylbeyondlimits/herdr-herdbook) | Visual `Workspace → Tab → Pane` tree, persistent pane naming, and full cross-panel drag-and-drop layout |
+| [herdr-usage-meter](https://github.com/zylbeyondlimits/herdr-usage-meter) | Live AI coding subscription & quota meter beside the tab bar (`Claude`, `Codex`, `Antigravity`, `Copilot`, etc.) |
+| [herdr-frost](https://github.com/zylbeyondlimits/herdr-frost) | Adjustable frosted-glass window blur and single-layer region translucency with lossless layout restore |
+| [herdr-launch-menu](https://github.com/zylbeyondlimits/herdr-launch-menu) | Customizable `+` agent launcher with custom order, extra CLI flags, and per-agent permission bypass toggles |
+
 ## License
 
-MIT for `herdbook-rename`, the layout and the tests. `herdbook-pane`,
-`herdbook-tabs`, `herdbook-agents`, `herdbook-spaces` and `herdbook-menu` are
-modified copies of Herdr's `pane`, `tabs`, `agents`, `spaces` and `menu` mods and stay under Apache 2.0 (see
-each folder's `LICENSE` and `NOTICE`).
+MIT for `herdbook-rename`, `drag.js`, `layouts/herdbook.json`, `scripts/`, and `tests/`. `herdbook-pane`, `herdbook-tabs`, `herdbook-agents`, `herdbook-spaces`, and `herdbook-menu` are modified copies of Herdr's `pane`, `tabs`, `agents`, `spaces`, and `menu` mods and stay under Apache 2.0 (see each folder's `LICENSE` and `NOTICE`).

@@ -1,181 +1,79 @@
 # Herdbook
 
-Herdr's own window, with names for your panes and your tabs as groups. Every
-pane can have a name you give it, and the name follows the terminal into the
-pane's header, the tab bar and the Agents list. In the Agents list, each tab's
-agents sit together in one rounded frame, tinted with the space's color, that
-you can fold, rename or move to another space from a right-click.
+Herdr's window organized around three visible layers—**Workspace → Tab → Pane**—with persistent names for every pane, space-tinted tab frames in the sidebar, hover quick-actions, and mouse/trackpad drag-and-drop across the sidebar, tab bar, and pane headers.
 
 ![Herdbook](preview.png)
 
 ## What you see
 
-The layout is Herdr's `main` with five blocks swapped; everything not listed
-here is Herdr's own. `herdbook-spaces` is Herdr's spaces list with the right-click
-going to herdbook-menu and drop targets for drags (below).
+`layouts/herdbook.json` mirrors Herdr 0.1.16's `main` layout (`titlebar: "none"`, `traffic_lights: [12, 16]`, 268px `chrome` sidebar on the left, `work` column on the right) with five Herdbook blocks swapped in (`herdbook-spaces`, `herdbook-agents`, `herdbook-tabs`, `herdbook-pane`, and root `"terminal_menu": "herdbook-menu"`) plus `herdbook-rename` as an on-demand dialog (`Alt-F2`). `workspace-chrome`, `files`, `changes`, and `workspace-status` remain Herdr's shipped mods.
 
-- **Tab bar** (`herdbook-tabs`, 30px, `chrome`). A tab with one pane on screen
-  looks like Herdr's: icon, then its label (max 170px), the pane's given name
-  instead when it has one. A tab with several panes on screen lists each
-  pane: its 14px icon and its name (max 96px each, truncated on its own),
-  separated by a `dim` "·", in split order (left to right, top to bottom);
-  the tooltip has every name. A tab someone named (not after its program),
-  with several panes: every pane's icon first, then the tab's name; the
-  tooltip lists the panes. Zoomed: only the zoomed pane, with " Z".
-- **Pane headers** (`herdbook-pane`, Herdr's pane header): icon, the pane's
-  name (14px icon, 12px `font_medium` `foreground`, max 260px), the folder in
-  `dim`, the status. On hover the buttons are, in order: move to another
-  space (`move-space.svg`, tooltip "Move to another space"), split right,
-  split down, zoom, close.
-- **Agents list** (`herdbook-agents`). The Priority view is Herdr's, with
-  given names. In "Grouped by space":
-  - Each space's header has a 14px rounded tile in the space's color
-    (shared `space.colors`, Herdr's spaces list sets it) with the name's
-    first letter in white 9px bold, then the space name in 12px semibold
-    `foreground`. From the second space on, a 1px `border` line and 6px gap
-    sit above the header.
-  - Each tab is a frame: 2px padding, 3px above and below, 10px corners, a
-    1px border in the space's color at 35% (`#rrggbb59`). Its header (20px,
-    10.5px text, 6px corners) has a fold chevron (11px), a `layers.svg`
-    icon, and the tab's name in `font_medium` `foreground` when someone named
-    it, else "N panes" in `dim`. A tab with one pane and no name has a frame
-    and no header.
-  - Folded, the header is 26px and 12px, `foreground`, and shows each agent's
-    13px icon, the count when more than one, and the most urgent status.
-    `selected` background when one of its agents is focused.
-  - Rows in a frame name their pane: the given name, else the agent's own
-    title, else its program; two that read the same get numbers in split
-    order ("zsh 1", "zsh 2").
-  - The list has 14px padding on the right so frames clear the scrollbar.
-- **Terminal and list menus** (`herdbook-menu`, popup 228×320, `popover`).
-  Herdr's menu plus "Rename pane" (`square-pen.svg`), "Move to space…" (a
-  `chevron-right` submenu), and on agent rows "Rename group". The move list
-  has a "Move to space" header with a back chevron, one row per other space
-  on the same machine (a 16px tile in its color with its first letter),
-  then a divider and "Move to new space" (`folder-plus.svg`). More than six
-  rows scroll (224px).
-- **Rename dialog** (`herdbook-rename`, dialog 380px wide, 18px padding,
-  `popover`): "Rename pane" 15px semibold, "Esc" hint, a "Name" label, a
-  36px input (9px corners, `accent` border while focused, `background`
-  fill), "Empty: the program's own name again." in `dim`, then Cancel and
-  Save (32px, 8px corners; Save is `solid` / `solid_foreground`).
+- **Spaces list** (`herdbook-spaces`, top half of sidebar, `chrome`): colored 18px rounded workspace avatars (`shared("space.colors")`), workspace name (`min_w(48)`), git repo/branch and `↑ahead`/`↓behind` tail, remote SSH machine headers, worktree indentation (`├─` / `└─`), and a header `+` button (`26px`). Narrower than `160px`, it renders a `32px`-cell compact numbered rail with status dots and tooltips.
+- **Agents / Workspace tree** (`herdbook-agents`, bottom half of sidebar, `chrome`, `1px` top `border`):
+  - **Header** (`41px`): `"Agents"` on the left and a view-switcher icon (`layers.svg` / `clock.svg`) on the right that opens a `212×140` popup to pick **Grouped by workspace** or **Priority**.
+  - **Grouped by workspace** (default): full `Workspace → Tab → Pane` tree in fixed structural and split order (shells, editors, mod panes, agents, and unkept sub-agent trees), preceded by an optional **Pinned** shortcut strip when any agent is pinned.
+    - **Workspace headers** (`30px`, or `36px` with top divider after the first): 14px color tile with initial, 12px semibold workspace name, optional remote machine tag, hover `18px` `+` quick-action (`New tab`, or `New tab or agent` when active with `launch-menu`), and folded pane count + status + right chevron when collapsed (`localStorage` `"spacesFolded"`).
+    - **Tab frames**: rounded cards (`10px` radius, `2px` padding, `1px` border in workspace color at `a6` alpha when active, `59` when inactive). Multi-pane tabs and custom-named tabs render a foldable `22px` header (`26px` when folded, `localStorage` `"groupsFolded"`) with chevron, `layers.svg` (or program icons when folded), tab name (or `"N panes"`), and a hover `16px` `+` button (`Split pane right`). Single-pane unnamed tabs render their pane row directly inside the card and show a `17px` hover `+` button (`Split pane right`) on the row. Duplicate pane names within one tab are numbered in split order (`"zsh 1"`, `"zsh 2"`).
+  - **Priority**: status-reporting agents grouped into `Pinned`, `Needs you` (`blocked`), `Done`, `Working`, and `Idle`, with sub-agent fold badges, hover pin buttons, and elapsed state durations.
+  - **Compact rail** (`sidebar` `< 160px`): numbered `26px` rows with compact status indicators, tooltips (`Workspace · Pane`), drag support, and a bottom `»` expand button.
+- **Tab bar** (`herdbook-tabs`, `42px` high in `herdbook.json`, `chrome`, `1px` bottom `border`, `window_drag: true`):
+  - Leaves room on macOS for traffic lights when the sidebar is narrow or hidden.
+  - **Single-pane chip** (`29px` high, `7px` radius): 14px icon + custom pane name (else Herdr's live agent title or tab/program label, max `170px`), status spinner/dot, and active close `×`.
+  - **Multi-pane unnamed chip**: lists each pane's 14px icon and name (`max_w(96)` each) separated by `dim` `"·"` in split order; each segment is individually clickable and draggable.
+  - **Multi-pane named group chip**: shows all pane icons (each individually draggable) followed by the tab's custom name, with every pane's name joined by `" · "` in the tooltip.
+  - **Zoomed tab**: shows only the zoomed pane with `" Z"`.
+  - **Trailing controls**: `26px` `+` button (opens `launch-menu` `268×512` when installed, else Herdr's `new-menu` `250×512`), `Files` and `Changes` panel toggles, and window buttons where `window().buttons` is true. When placed inside a `tabs-row` `row` with any visible sibling after it (`frost`, `usage-meter`, or both), right padding automatically tightens from `10px` to `3px`.
+- **Pane headers** (`herdbook-pane`, `30px` high on every pane via `lone: true`): 14px program icon, custom pane name (`max_w(260)`, `font_medium`, `foreground`), `~`-shortened folder in `dim`, status indicator (`12px` spinning ring, `"Needs you"` pill, or `done` dot), and on hover: Move to another workspace (`move-space.svg`), Split right, Split down, Zoom/Unzoom, and Close. During a pure-JS pane drag, hovering the left 65% or right 35% of another pane's header highlights it in `accent` with `"→ Split right"` or `"↓ Split down"`.
+- **Context menu** (`herdbook-menu`, popup `228×320`, `popover`): keyboard (`↑`/`↓`/`Enter`/`→`/`←`/`Esc`) and mouse menu for panes, sidebar agent/pane rows, tabs, workspaces, and `Move to space…` submenu (listing same-machine workspaces with colored tiles plus `"Move to new space"`).
+- **Rename dialog** (`herdbook-rename`, dialog `380px` wide, `18px` padding, `popover`): `"Rename pane"` header with `"Esc"` hint, `36px` `Input` (`9px` radius, `accent` focus border), hint text, and `Cancel` / `Save` buttons (`32px` high).
 
 ## How it behaves
 
-- A pane's name is its terminal's `pane-name` label in herdr-core. It stays
-  with the terminal through restarts and moves; `hc label t3 pane-name=api`
-  sets it from a shell, `hc label t3 pane-name=` clears it.
-- Renaming: double-click a pane header, "Rename pane" in the right-click
-  menu of a pane, a terminal or an Agents row, or Alt-F2 (`keys.json`,
-  `mod.open:herdbook-rename`) for the focused pane. The dialog opens with the
-  current name selected; Enter or Save writes it (spaces collapsed, trimmed),
-  Esc or Cancel closes. Empty goes back to the program's name. A failed
-  write shows an error toast with `hc`'s message.
-- Groups are tabs. "Rename group" (agent row menu) and a double-click on a
-  frame header run `tab.rename`, which asks for the name. A single click on
-  a frame header focuses the tab's first pane. Right-click a frame header for
-  the tab menu.
-- The chevron folds a frame; folds are kept across restarts (localStorage
-  `groupsFolded`, per copy of the mod).
-- Order in "Grouped by space": the space with the most recent agent state
-  change comes first, and in a tab the agent that changed last comes first.
-  Looking at a finished agent (done to idle) doesn't count. Ties keep
-  Herdr's order. Tabs keep their order inside a space; the Spaces list keeps
-  its own order. `setAgentOrder` follows the list, so `agent.next` does too.
-- Statuses look as in Herdr: working a 12px spinning ring, blocked a "Needs
-  you" badge (a "!" tile in compact spots), done a dot, idle a ring.
-- Moving ("Move to space…", the header button, a tab's right-click): pick a
-  space on the same machine or a new one. A pane moves alone; a tab moves
-  with all its terminals, which land side by side in one tab with its name.
-  The terminals keep running and keep their names. The target space is
-  shown afterwards. If a step fails, the terminals go back to their own space
-  and a toast says what failed.
-- Dragging, on a Herdr build that has `startDrag`, `dragging` and
-  `setDragSpace` (official 0.1.16 doesn't): press a pane header, an agent
-  row or a tab chip and drag. The source dims (0.6 for a header, 0.55 for a
-  row or chip); the space row or "+" under the pointer is reported with
-  `setDragSpace`; Herdr moves it on release. Tab chips also reorder along the
-  bar (`setDragTab`). Buttons inside the header and rows (move, split, zoom,
-  close, pin, fold) stop the press, so they never start a drag. Without those
-  functions none of this exists and nothing else changes.
-- Without `herdbook-menu`, right-clicks on headers and rows do nothing, the
-  move button is gone, and the tab bar opens Herdr's `menu`. Without
-  `herdbook-rename`, double-click does nothing and "Rename pane" is gone.
+- **Pane naming & Herdr 0.1.17 forward compatibility:**
+  - Reading a pane's custom name everywhere (`herdbook-pane`, `herdbook-tabs`, `herdbook-agents` grouped tree, priority view, pinned strip, sub-agents, and `herdbook-rename` initial value) checks `terminal.labels?.["pane-name"] || pane.name || agent.pane_name`.
+  - Saving in `herdbook-rename` collapses whitespace, trims, writes `hc(["label", terminal, "pane-name=<name>"])` for terminal panes (including remote SSH `machine/tN` addresses, surviving restarts and `park`/`keep` cross-space moves), AND when `commands()` includes `"pane.rename"` (Herdr 0.1.17+), also runs `run("pane.rename", { pane, name })`. On Herdr 0.1.17+, non-terminal mod panes (`pane.split { mod }`) can be renamed via `pane.rename` too. Submitting an empty string clears both back to the default title/program name.
+- **Pure-GUI quick actions:**
+  - Hovering a Workspace header in `herdbook-agents` reveals `+`: opens `launch-menu` when installed and that workspace is active, else runs `tab.new { space }`.
+  - Hovering a Tab frame header (or a single-pane tab's row) reveals `+`: runs `pane.split { direction: "right", pane: firstPane }`.
+  - Every inline button (`+`, fold chevron, pin, sort, close, split, zoom, move) stops `on_mouse_down("left")` propagation and clears any pending JS drag state so clicking a button never triggers a drag.
+- **Dual-engine drag and drop (`drag.js`):**
+  - **Route 1 (Native Herdr drag):** when `startDrag`, `dragging`, `setDragSpace`, `setDragTab`, `setDragGroup`, and `setDragGap` exist on `"herdr"`, delegates directly to Herdr's native drag overlay and 4-edge pane drop zones.
+  - **Route 2 (Pure-JS fallback on official Herdr 0.1.16+):** coordinates across `herdbook-spaces`, `herdbook-agents`, `herdbook-tabs`, and `herdbook-pane` via `shared("herdbook.drag")` after a `5px` movement threshold:
+    - **Workspace reorder:** `space.move { id, index }` within the same machine; newly discovered git worktrees snap under their main checkout once (`localStorage` `"worktrees.placed"`) and never overwrite subsequent manual drags.
+    - **Tab reorder & cross-space move:** `tab.move { id, index }` within a space; cross-space tab/pane drops use `tab.move` / `pane.move` with `{ space }` when present in `commands()`, else `moveTerminals` (`terminal.park` → `space.select` / `space.new { folder, machine }` → `terminal.keep` + `tab.rename` + `terminal.keep { place: "right" }`, closing `space.new`'s extra shell tab and rolling back parked terminals if any step times out).
+    - **Pane merge / swap / split-to-gap:** dropping on a same-tab pane runs `pane.swap`; dropping on another tab chip, tab frame header, or pane header parks and keeps beside the target pane (`right` or `down`); dropping into a gap between tab frames (or onto top-bar `+`) splits the pane into a new tab at that exact slot (`gapSlotIndex`).
+    - **Safety & cleanup:** unmoved presses expire after `1.5s`, idle drags without pointer movement expire after `2.5s`, pointer exit from target bounds clears the highlight immediately, `on_mouse_down_out` clears leftover state on outside clicks, cross-machine drops are blocked, and scrolling lists auto-scroll near top/bottom/left/right edges (`autoScrollOnDrag`).
+- **Layout switching & graceful degradation:**
+  - Switching layouts with `Ctrl+Shift+L` (`layout.switch`) leaves `main` and personal layouts untouched.
+  - Without `herdbook-menu`, right-clicks in `herdbook-tabs` and `herdbook-spaces` fall back to Herdr's `"menu"`, and `herdbook-pane` / `herdbook-agents` hide menu-only actions without errors. Without `herdbook-rename`, double-click falls back to `pane.rename` when available in `commands()`, else focuses the pane.
 
 ## Built from
 
-- `layouts/herdbook.json`: Herdr 0.1.16's `main`, with `"terminal_menu":
-  "herdbook-menu"` on the root, `herdbook-agents` for the agents block,
-  `herdbook-tabs` for the tabs block and `herdbook-pane` as the tab block's
-  `content.pane.header.content.mod`. Spaces, files, changes,
-  workspace-chrome and workspace-status are Herdr's.
-- `herdbook-pane`, `herdbook-tabs`, `herdbook-agents`, `herdbook-spaces`,
-  `herdbook-menu`: Herdr's `pane`, `tabs`, `agents`, `spaces` and `menu` cloned
-  with `mod.clone`, Apache 2.0
-  (each has `LICENSE` and `NOTICE`). Pure logic sits in files without a
-  `herdr` import so node can test them: `herdbook-tabs/names.js` (`chip`,
-  `label`, `paneLabel`), `herdbook-agents/groups.js` (`groupedOrder`,
-  `frameName`, `paneNames`), `herdbook-menu/move.js` (`moveTerminals`).
-- `herdbook-rename`: new, MIT. `mod.json` `{ "place": "none", "overlay":
-  { "kind": "dialog", "width": 380 } }`. Props `{ target: { pane, terminal } }`,
-  or none for the focused pane. Writes with `hc(["label", terminal,
-  "pane-name=<name>"])`.
-- Reads: `terminals()[i].labels["pane-name"]`, `panes()`, `spaces()`,
-  `agents()`, `focused()`, `shared("space.colors")`, `commands()`.
-- The other four mods check whether the menu and rename mods are installed with
-  `readTextFile(appHome() + "/mods/<name>/mod.json")` (null when missing).
-- Moving: when `commands()` has `pane.move` and `tab.move` with a `space`
-  argument (not in official 0.1.16), it runs those. Otherwise `move.js`:
-  `terminal.park` each terminal and wait until its pane is gone; for a new
-  space `space.new {folder, machine}` and wait until it's shown, else
-  `space.select {id}` and wait until `focused().space` is the target;
-  `terminal.keep` the first and wait until its pane is in the target space;
-  `tab.rename` that tab (the moved tab's name, or `""`); `pane.focus` it and
-  `terminal.keep {place: "right"}` each other one; close the extra shell tab
-  `space.new` made. Every wait polls every 25ms for at most 2.5s. On failure
-  it selects the source space and keeps each parked terminal there.
-- Programs run: `git rev-parse` (Herdr's menu, for worktree items) and
-  `hc label`. No network.
+- `layouts/herdbook.json` (MIT) and `keys.json` (`{ "global": { "alt-f2": "mod.open:herdbook-rename" } }`).
+- Six mods under `mods/`:
+  - `herdbook-rename` (MIT): `main.js` + pure `rename.js` (`resolveRenameTarget`, `savePaneName`, `normalizePaneName`).
+  - `herdbook-agents` (Apache 2.0, cloned from `agents` 0.1.16): `main.js` + pure `groups.js` (`workspaceTree`, `frameName`, `tabPaneNames`, `customPaneName`, `paneNames`) + `drag.js`.
+  - `herdbook-tabs` (Apache 2.0, cloned from `tabs` 0.1.16): `main.js` + pure `names.js` (`chip`, `label`, `paneLabel`, `customPaneName`, `hasTrailingSibling`) + `drag.js` + Windows titlebar SVGs.
+  - `herdbook-pane` (Apache 2.0, cloned from `pane` 0.1.16): `main.js` + `drag.js` + `move-space.svg`, `split-right.svg`, `split-down.svg`, `zoom.svg`, `unzoom.svg`, `close.svg`.
+  - `herdbook-spaces` (Apache 2.0, cloned from `spaces` 0.1.16): `main.js` + `drag.js`.
+  - `herdbook-menu` (Apache 2.0, cloned from `menu` 0.1.16): `main.js` + pure `move.js` (`moveTerminals`).
+- `scripts/sync-drag.sh`: copies canonical `mods/herdbook-agents/drag.js` into `herdbook-tabs`, `herdbook-pane`, and `herdbook-spaces`; `tests/run.sh` asserts byte-for-byte parity before running Node tests.
+- Co-existence in `tabs-row`: wrap `herdbook-tabs` (`weight: 1`) with `frost` (`px: 68`, `props: { block: "frost" }`) and/or `usage-meter` (`px: 78`, `props: { block: "usage" }`) inside a `42px` `row` (`resizable: false`, `window_drag: true`).
+- `herdr` APIs used: `spaces`, `machines`, `agents`, `panes`, `terminals`, `focused`, `layout`, `theme`, `settings`, `window`, `keys`, `commands`, `run`, `openOverlay`, `closeOverlay`, `notify`, `shared`, `setShared`, `setAgentOrder`, `hc`, `exec`, `watchFolder`, `appHome`, `home`, `readTextFile`, `checking`, and optional native drag functions via namespace import.
 
 ## Watch out
 
-- Drag functions exist only on some builds. Import them through `import * as`
-  and test `typeof … === "function"`: a named import of a missing function
-  stops the whole mod loading.
-- `fs/promises` `exists` refuses paths outside the home folder in a mod
-  ("outside every granted read root"); `appHome()` can be elsewhere
-  (`HERDR_APP_HOME`). Use `readTextFile`, which returns null for a missing
-  file.
-- `openOverlay` for a mod that isn't installed still returns an id and adds
-  an error to `herdr-app status`; check first instead of relying on it.
-- `terminal.keep` names its new tab after the terminal's address ("t7").
-  Rename it after keeping.
-- `space.new` always makes a shell of its own; close that tab after the move.
-- Don't call a method `close()` on a View for your own use: Herdr calls a
-  View's `close(cx)` when the overlay goes.
-- A park-and-keep move can't keep a tab's split layout: the panes land side
-  by side. Herdr has no command to place a kept terminal under another one
-  in a given spot.
-- The move list only offers spaces on the target's own machine; a
-  terminal can't change machines.
-- Fold state is per copy (localStorage): another layout's agents block starts
-  unfolded.
-- These are copies: they won't pick up later changes to Herdr's mods.
+- **Guard `init()` with `checking()`:** `herdr-app check` executes `init()` for real and warns if `hc`, `exec`, or `writeTextFile` run. Every Herdbook mod checks `herdr.checking()` before starting background tasks or timers.
+- **Namespace-import optional Herdr exports:** `startDrag`, `dragging`, `setDrag*`, and `checking` may not exist on older builds; access them via `import * as herdrAll from "herdr"` with `typeof ... === "function"` checks so module loading never fails.
+- **Keep `drag.js` copies in sync:** Herdr mods cannot import `../other-mod/drag.js` across mod folders. Edit `mods/herdbook-agents/drag.js` and run `./scripts/sync-drag.sh`.
+- **Use `readTextFile(appHome() + "/mods/<name>/mod.json")` for mod detection:** `fs/promises` only reads inside the user's home directory, whereas `HERDR_APP_HOME` may live under `/tmp` or a custom config path.
+- **Never name a helper method `close()` on a `View`:** Herdr invokes `View.prototype.close(cx)` when an overlay or block unmounts (`herdbook-rename` names its helper `dismiss()`).
+- **Model panes vs layout terminal blocks:** only pass `pane` to `pane.rename` when `panes().some(p => p.pane === id)` is true; floating/layout terminal blocks carry block IDs outside `panes()`.
 
 ## Done when
 
-- `herdr-app check` passes for all six mods on official Herdr and on a build
-  with the drag functions, and `tests/run.sh` passes.
-- `hc label t3 pane-name=api` shows "api" in t3's pane header, its tab chip
-  and its Agents row within a second; clearing it brings the program's name
-  back.
-- A tab with two panes shows both names in its chip; after `tab.rename` to
-  "login fix" it shows both icons and "login fix".
-- In "Grouped by space" each tab with agents is a frame in its space's color;
-  folding one keeps it folded after the app restarts.
-- On official Herdr 0.1.16: moving a pane to another space leaves it running
-  there with its name, in a tab named by its number; moving a two-pane tab
-  keeps both panes and the tab's name; "Move to new space" leaves one tab in
-  the new space.
-- With `herdbook-menu` and `herdbook-rename` removed, the other three mods
-  check and run with no errors in `herdr-app status`.
+- `./tests/run.sh` passes 100% (including `drag.js` sync parity, `0.1.17` `pane.name` / `pane_name` fallback, `herdbook-rename`, mod-pane & remote SSH drag rules, stale-drag cleanup, and `tabs-row` trailing sibling detection).
+- `herdr-app check` passes with 0 errors and 0 `WARN` lines on all six `mods/herdbook-*` folders on both official Herdr and native-drag Herdr builds.
+- Setting `hc label t3 pane-name=api` (or `pane.rename` on 0.1.17+) updates the pane header, tab chip, and sidebar grouped/priority rows within a second; clearing it restores the default program/title label.
+- Hovering a workspace header or tab frame in `herdbook-agents` reveals `+` and creates a tab or right split without starting a drag.
+- Dragging panes, tabs, and workspaces reorders or moves them cleanly in both dark and light (`"paper"`) themes, and `herdr-app status` reports `"errors": []` both with all six mods installed and when optional `herdbook-menu` / `herdbook-rename` are omitted.

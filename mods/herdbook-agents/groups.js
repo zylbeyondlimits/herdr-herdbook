@@ -1,49 +1,111 @@
-// How the grouped view orders and names agents. No herdr import, so node can test it.
+// Pure helpers for the Workspace -> Tab -> Pane tree and pane row labels.
+// No `herdr` import so Node tests can import and verify every rule.
 
-// Grouped: the space where an agent's state changed last comes first, and within
-// a tab (a group) so does that agent, so a finished or newly working one rises to
-// the top. Tabs keep their order in a space. `list` is in agents() order (a
-// space's agents together, a tab's together); since(a) is when a changed (ms).
-export function groupedOrder(list, since) {
-  const runs = [];
-  for (const a of list) {
-    const r = runs.find((x) => x.space === a.space);
-    if (r) r.members.push(a);
-    else runs.push({ space: a.space, members: [a] });
-  }
-  const latest = (r) => Math.max(0, ...r.members.map(since));
-  // sort is stable: ties keep Herdr's order.
-  runs.sort((x, y) => latest(y) - latest(x));
-  return runs.flatMap((r) => {
-    const tabs = [];
-    for (const a of r.members) {
-      if (tabs.at(-1)?.[0].tab === a.tab) tabs.at(-1).push(a);
-      else tabs.push([a]);
+// Drops status glyphs / spinners before an agent's title ("✦ Working", "⠋ - Thinking", "[ ! ] ").
+// Preserves leading brackets or quotes ("[web] login").
+export const cleanTitle = (s) => (s ?? "").replace(/^[^\p{L}\p{N}\p{Ps}\p{Pi}]+/u, "").replace(/^\[ [!.] \] /, "").trim();
+
+// Custom name precedence across Herdr 0.1.16 (`hc label` -> `labels["pane-name"]`)
+// and Herdr 0.1.17+ (`panes()[i].name` / `agents()[i].pane_name`).
+export function customPaneName(p, named) {
+  if (!p) return null;
+  const addr = p.terminal ?? p.address ?? null;
+  const fromMap = (addr && named?.get(addr)) || (p.pane && named?.get(`pane:${p.pane}`)) || null;
+  return fromMap || p.labels?.["pane-name"] || p.name || p.pane_name || null;
+}
+
+// Fixed order for the grouped view: exact Workspace order -> exact Tab order -> exact Pane split order,
+// so dragging a workspace, tab, or pane stays right where it was dropped instead of jumping on status updates.
+export function workspaceTree(spaces, panes) {
+  const byTab = new Map();
+  for (const p of panes ?? []) {
+    let list = byTab.get(p.tab);
+    if (!list) {
+      list = [];
+      byTab.set(p.tab, list);
     }
-    return tabs.flatMap((t) => t.sort((x, y) => since(y) - since(x)));
-  });
+    list.push(p);
+  }
+  return (spaces ?? []).map((space, spaceIndex) => ({
+    space,
+    spaceIndex,
+    tabs: (space.tabs ?? []).map((tab, tabIndex) => ({
+      tab,
+      tabIndex,
+      panes: byTab.get(tab.id) ?? [],
+    })),
+  }));
 }
 
-// A tab someone named, not just after its program (Herdr names a tab after its
-// first agent): its name, else null.
+// Legacy signature preserved for compatibility when callers pass a flat list: keeps fixed input order.
+export function groupedOrder(list) {
+  return [...(list ?? [])];
+}
+
+// A tab someone named (not just Herdr's automatic program name): its name, else null.
 export function frameName(tab, panes) {
-  return tab.named && !panes.some((p) => p.tab === tab.id && p.program?.name === tab.name) ? tab.name : null;
+  return tab?.named && !(panes ?? []).some((p) => p.tab === tab.id && p.program?.name === tab.name) ? tab.name : null;
 }
 
-// In a frame each row names its pane: label(a), or its program's name where the
-// label is only an automatic tab number; two that read the same get numbers in
-// split order ("zsh 1", "zsh 2"). order: Map terminal address -> split position.
+// Base label for one pane inside a tab frame (before duplicate numbering).
+export function basePaneName(p, named) {
+  const custom = customPaneName(p, named);
+  if (custom) return custom;
+  const addr = p.terminal ?? p.address ?? null;
+  if (p.mod && !addr) return p.title || p.mod;
+  const prog = p.program?.name;
+  const live = cleanTitle(p.title);
+  const isPath = /^[~/]|^[A-Za-z]:\\/.test((p.title ?? "").replace(/^[^\p{L}\p{N}~/]+/u, ""));
+  const telling =
+    Boolean(live) &&
+    live !== addr &&
+    live !== prog &&
+    !isPath &&
+    !live.includes("@") &&
+    live.toLowerCase() !== (p.program?.key ?? "").toLowerCase();
+  if (p.program?.agent && telling) return live;
+  if (!p.program?.agent && !p.program?.shell && prog) return prog;
+  return prog || (telling ? live : "") || "Terminal";
+}
+
+// Numbers duplicate pane names within each tab in split order ("zsh 1", "zsh 2").
+// Keyed by `p.pane ?? p.address`.
+export function tabPaneNames(inTab, named = new Map()) {
+  const out = new Map();
+  const keyOf = (p) => p.pane ?? p.address;
+  const bases = (inTab ?? []).map((p) => [keyOf(p), basePaneName(p, named)]);
+  const count = {};
+  const nth = {};
+  for (const [, n] of bases) count[n] = (count[n] ?? 0) + 1;
+  for (const [k, n] of bases) {
+    nth[n] = (nth[n] ?? 0) + 1;
+    out.set(k, count[n] > 1 ? `${n} ${nth[n]}` : n);
+  }
+  return out;
+}
+
+// Compatible wrapper over flat agent/pane lists with explicit split-order map.
 export function paneNames(list, order, label) {
   const out = new Map();
-  for (const tab of new Set(list.map((a) => a.tab))) {
-    const inTab = list.filter((a) => a.tab === tab).sort((x, y) => (order.get(x.address) ?? 0) - (order.get(y.address) ?? 0));
-    const base = new Map(inTab.map((a) => [a.address, /^\d+$/.test(label(a)) ? a.program?.name || label(a) : label(a)]));
-    const count = {}, nth = {};
+  for (const tab of new Set((list ?? []).map((a) => a.tab))) {
+    const inTab = list
+      .filter((a) => a.tab === tab)
+      .sort((x, y) => (order.get(x.address ?? x.pane) ?? 0) - (order.get(y.address ?? y.pane) ?? 0));
+    const base = new Map(
+      inTab.map((a) => {
+        const key = a.address ?? a.pane;
+        const raw = label ? label(a) : basePaneName(a);
+        return [key, /^\d+$/.test(raw) ? a.program?.name || raw : raw];
+      }),
+    );
+    const count = {};
+    const nth = {};
     for (const n of base.values()) count[n] = (count[n] ?? 0) + 1;
     for (const a of inTab) {
-      const n = base.get(a.address);
+      const key = a.address ?? a.pane;
+      const n = base.get(key);
       nth[n] = (nth[n] ?? 0) + 1;
-      out.set(a.address, count[n] > 1 ? `${n} ${nth[n]}` : n);
+      out.set(key, count[n] > 1 ? `${n} ${nth[n]}` : n);
     }
   }
   return out;

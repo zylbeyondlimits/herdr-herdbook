@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-mods/herdbook-pane, mods/herdbook-tabs, mods/herdbook-agents and
-mods/herdbook-menu are modified copies of Herdr's pane, tabs, agents and menu
-mods and stay under the Apache License 2.0; see the LICENSE and NOTICE in each
-of those folders.
+mods/herdbook-pane, mods/herdbook-tabs, mods/herdbook-agents,
+mods/herdbook-spaces and mods/herdbook-menu are modified copies of Herdr's
+pane, tabs, agents, spaces and menu mods and stay under the Apache License 2.0;
+see the LICENSE and NOTICE in each of those folders.
