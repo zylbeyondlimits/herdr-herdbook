@@ -527,12 +527,22 @@ export async function executeDrop(api, d, target, timeout = 2500) {
 
     if (wholeTabId) {
       const curSpace = spaceOfTab(sp, wholeTabId);
+      // A pane (not the tab header) taken out of a one-pane group leaves the group's name behind.
+      const srcTabObj = curSpace?.tabs?.find((t) => t.id === wholeTabId) ?? null;
+      const clearLoneGroupName = Boolean(
+        d.kind !== "tab" &&
+        inSrcTab.length === 1 &&
+        srcTabObj?.named &&
+        !inSrcTab.some((p) => p.program?.name === srcTabObj.name),
+      );
       if (curSpace?.id === dstSpace.id) {
         const index = gapSlotIndex(dstSpace.tabs, target.before, target.after, wholeTabId);
+        if (clearLoneGroupName) api.run("tab.rename", { id: wholeTabId, name: "" });
         api.run("tab.move", { id: wholeTabId, index });
         return { ok: true };
       }
       if (nativeMoveCommands(api)) {
+        if (clearLoneGroupName) api.run("tab.rename", { id: wholeTabId, name: "" });
         api.run("tab.move", { id: wholeTabId, space: dstSpace.id });
         const fresh = api.spaces().find((s) => s.id === dstSpace.id);
         api.run("tab.move", { id: wholeTabId, index: gapSlotIndex(fresh?.tabs, target.before, target.after, wholeTabId) });
@@ -547,7 +557,7 @@ export async function executeDrop(api, d, target, timeout = 2500) {
         space: dstSpace.id,
         folder: lead?.cwd ?? null,
         machine: d.machine ?? null,
-        tabName: tabObj?.named ? tabObj.name : null,
+        tabName: !clearLoneGroupName && tabObj?.named ? tabObj.name : null,
         timeout,
       });
       if (!r.ok) return r;

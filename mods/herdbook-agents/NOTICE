@@ -4,7 +4,7 @@ the Apache License 2.0 (LICENSE in this folder).
 
 Changes from the original: "Grouped by workspace" shows the full fixed-order
 Workspace -> Tab -> Pane tree (shells, editors, mod panes, agents, and
-sub-agents) in space-tinted rounded frames (`groups.js`), with foldable headers
+sub-agents) in space-tinted rounded frames (`groups.js`; headers only for 2+ panes, a shrunk group dissolves, and status changes lift pane -> group -> workspace), with foldable headers
 (`groupsFolded` / `spacesFolded` in localStorage), hover `+` quick-actions on
 workspaces and tabs, `pane-name` / `pane.name` labels, right-click menus via
 herdbook-menu when installed, and native + pure-JS drag and drop (`drag.js`).

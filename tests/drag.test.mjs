@@ -308,6 +308,31 @@ test("remote SSH machine/tN addresses enforce same-machine isolation and forward
   assert.ok(state.log.some(([cmd, args]) => cmd === "space.new" && args.machine === "vps" && args.folder === "/srv/api"));
 });
 
+test("Route 2: a pane dragged out of a one-pane named group clears the group name; a tab header drag keeps it", async () => {
+  const mk = () => {
+    const f = fakeOfficialHost();
+    f.state.spaces[0].tabs = [{ id: "ta1", named: true, name: "login fix" }, { id: "ta2" }];
+    f.state.panes = f.state.panes.filter((p) => p.pane !== "p2");
+    return f;
+  };
+  const gap = { type: "gap", key: "gap-s1-after-ta2", space: "s1", after: "ta2" };
+
+  const a = mk();
+  startModDrag(a.h, { kind: "pane", pane: "p1", terminal: "t1", label: "zsh", x: 10, y: 10 }, 100);
+  reportDragTarget(a.h, { position: { x: 20, y: 50 }, bounds: { x: 0, y: 45, width: 200, height: 12 } }, gap, 120);
+  const da = activeDrag(a.h, 120);
+  assert.equal((await executeDrop(a.h, da, da.target)).ok, true);
+  assert.deepEqual(a.state.log.map(([n]) => n), ["tab.rename", "tab.move"]);
+  assert.deepEqual(a.state.log[0][1], { id: "ta1", name: "" });
+
+  const b = mk();
+  startModDrag(b.h, { kind: "tab", tab: "ta1", label: "login fix", x: 10, y: 10 }, 100);
+  reportDragTarget(b.h, { position: { x: 20, y: 50 }, bounds: { x: 0, y: 45, width: 200, height: 12 } }, gap, 120);
+  const db = activeDrag(b.h, 120);
+  assert.equal((await executeDrop(b.h, db, db.target)).ok, true);
+  assert.deepEqual(b.state.log.map(([n]) => n), ["tab.move"], "moving the tab itself keeps its name");
+});
+
 test("Route 1 (Native Herdr drag) & edge autoScrollOnDrag", () => {
   const calls = [];
   let current = null;

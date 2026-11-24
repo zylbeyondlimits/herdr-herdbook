@@ -10,8 +10,18 @@ import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, ScrollHandle } from "gpui-base";
 import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, appHome, readTextFile } from "herdr";
 import * as herdrAll from "herdr";
-import { workspaceTree, frameName, tabPaneNames, cleanTitle } from "./groups.js";
 import {
+  frameName,
+  tabPaneNames,
+  cleanTitle,
+  stepTabGroupCounts,
+  createTreeOrderState,
+  stepWorkspaceTree,
+  applyManualDropToTreeOrder,
+  effectivePaneStatus,
+} from "./groups.js";
+import {
+  pointInBounds,
   activeDrag,
   startModDrag,
   cancelModDrag,
@@ -112,6 +122,15 @@ export default class Agents extends View {
     this.migratingPins = new Set();
     try { this.groupsFolded = new Set(JSON.parse(localStorage.getItem("groupsFolded") ?? "[]")); } catch { this.groupsFolded = new Set(); }
     try { this.spacesFolded = new Set(JSON.parse(localStorage.getItem("spacesFolded") ?? "[]")); } catch { this.spacesFolded = new Set(); }
+    // Pane count per tab (a group that shrinks to one pane dissolves) and the order the grouped
+    // view shows (status changes lift pane -> group -> workspace).
+    try { this.tabPaneCounts = JSON.parse(localStorage.getItem("tabPaneCounts") ?? "{}"); } catch { this.tabPaneCounts = {}; }
+    if (!this.tabPaneCounts || typeof this.tabPaneCounts !== "object" || Array.isArray(this.tabPaneCounts)) this.tabPaneCounts = {};
+    this.dissolvingTabs = new Set();
+    try { this.treeOrder = createTreeOrderState(JSON.parse(localStorage.getItem("treeOrder") ?? "null")); } catch { this.treeOrder = createTreeOrderState(); }
+    this.observedDrag = null;
+    this.lastSidebarTarget = null;
+    this.lastPointerPos = null;
     this.hasMenu = false;
     this.hasRename = false;
     this.hasLaunchMenu = false;
@@ -134,6 +153,15 @@ export default class Agents extends View {
   notePress(e, rowIndex, now = Date.now()) {
     this.lastSelfActionAt = now;
     recordDragAnchor(this.scrollState, e, rowIndex, now);
+  }
+
+  // Reports a drop target and remembers it, so a drop in this list can fix the order shown.
+  noteDragTarget(e, target, now = Date.now()) {
+    this.lastPointerPos = e?.position ?? this.lastPointerPos;
+    if (e?.bounds && target && activeDrag(herdrAll, now)) {
+      this.lastSidebarTarget = { target, bounds: { x: e.bounds.x, y: e.bounds.y, width: e.bounds.width, height: e.bounds.height }, at: now };
+    }
+    reportDragTarget(herdrAll, e, target, now);
   }
 
   menu(tab, target) {
@@ -377,6 +405,42 @@ export default class Agents extends View {
     const panesByAddr = new Map(panesNow.filter((p) => p.terminal).map((p) => [p.terminal, p]));
     const spacesNow = spaces();
     const named = new Map(all.filter((k) => k.labels?.[LABEL]).map((k) => [k.address, k.labels[LABEL]]));
+    const isChecking = typeof herdrAll.checking === "function" && herdrAll.checking();
+
+    // A group that shrank from several panes to one is a group no more: unfold it and clear its name.
+    const grpStep = stepTabGroupCounts(this.tabPaneCounts, spacesNow, panesNow);
+    this.tabPaneCounts = grpStep.nextCounts;
+    if (!isChecking && grpStep.changed) localStorage.setItem("tabPaneCounts", JSON.stringify(this.tabPaneCounts));
+    const liveTabs = new Map(spacesNow.flatMap((s) => s.tabs ?? []).map((tb) => [tb.id, tb]));
+    for (const id of [...this.dissolvingTabs]) {
+      const tb = liveTabs.get(id);
+      if (!tb || !frameName(tb, panesNow)) this.dissolvingTabs.delete(id);
+    }
+    const unfold = new Set(grpStep.unfoldTabIds);
+    const staleFolds = [...this.groupsFolded].filter((id) => unfold.has(id) || (liveTabs.size && !liveTabs.has(id) && !String(id).includes("/")));
+    if (staleFolds.length) {
+      for (const id of staleFolds) this.groupsFolded.delete(id);
+      if (!isChecking) localStorage.setItem("groupsFolded", JSON.stringify([...this.groupsFolded]));
+    }
+    if (!isChecking) {
+      for (const id of grpStep.dissolveTabIds) {
+        if (this.dissolvingTabs.has(id)) continue;
+        this.dissolvingTabs.add(id);
+        run("tab.rename", { id, name: "" });
+      }
+    }
+
+    // A drop made in this list puts the item where it was dropped in the order shown.
+    if (dragNow) {
+      this.observedDrag = { kind: dragNow.kind, space: dragNow.space, tab: dragNow.tab, pane: dragNow.pane, terminal: dragNow.terminal };
+    } else if (this.observedDrag) {
+      const last = this.lastSidebarTarget;
+      if (last && now - last.at < 800 && (!this.lastPointerPos || pointInBounds(this.lastPointerPos, last.bounds))) {
+        applyManualDropToTreeOrder(this.treeOrder, this.observedDrag, last.target, panesNow);
+      }
+      this.observedDrag = null;
+      this.lastSidebarTarget = null;
+    }
 
     const spaceColors = shared("space.colors") ?? {};
     const spaceFill = (id) => {
@@ -524,7 +588,16 @@ export default class Agents extends View {
       }
     } else {
       // --- Grouped by workspace: Full Workspace -> Tab -> Pane graphical tree ---
-      const treeData = workspaceTree(spacesNow, panesNow);
+      // Status changes lift the pane in its group, the group in its workspace, the workspace in the list.
+      const getPaneStatus = (p) => {
+        if (!p.terminal) return p.status ?? null;
+        const subs = collapsed ? [] : this.tree(all, p.terminal, panesByAddr, false).map((s) => kidStatus(s.t, this.listed));
+        return effectivePaneStatus(p, this.listed, subs);
+      };
+      const treeStep = stepWorkspaceTree(this.treeOrder, spacesNow, panesNow, getPaneStatus);
+      this.treeOrder = treeStep.state;
+      if (!isChecking && treeStep.dirty) localStorage.setItem("treeOrder", JSON.stringify(this.treeOrder));
+      const treeData = treeStep.tree;
       const orderedAgentAddrs = [];
       const pinnedAgents = rawAgents.filter((a) => a.pinned);
       for (const a of pinnedAgents) orderedAgentAddrs.push(a.address);
@@ -578,7 +651,7 @@ export default class Agents extends View {
         };
         const move = (e) => {
           recordHoverIndex(this.scrollState, rIdx, now);
-          reportDragTarget(herdrAll, e, { type: "group", key: targetKey, tab: tab.id, pane: p.pane, name: rowName }, now);
+          this.noteDragTarget(e, { type: "group", key: targetKey, tab: tab.id, pane: p.pane, name: rowName }, now);
         };
         const openMenu = (_e, cx) => {
           cx.stop_propagation();
@@ -662,10 +735,11 @@ export default class Agents extends View {
         return [mainRow, ...subs.map((s) => this.subRow(t, s, shown, false, dragNow, panesNow, agentByAddr, rIdx))];
       };
 
-      const tabFrame = (tab, space, inTab, rIdx) => {
+      const tabFrame = (tab, space, inTab, splitInTab, rIdx) => {
         const name = frameName(tab, panesNow);
         const first = inTab[0] ?? null;
-        const headed = Boolean(name) || inTab.length > 1;
+        // Only several panes make a group; one pane is a plain card even if its tab still has a name.
+        const headed = inTab.length > 1;
         const shut = headed && this.groupsFolded.has(tab.id);
         const top = inTab.reduce((m, p) => {
           const st = (p.terminal && this.listed.get(p.terminal)) || p.status;
@@ -674,7 +748,7 @@ export default class Agents extends View {
         const pics = inTab.map((p) => icon(p.program, 13, t.foreground)).filter(Boolean);
         const grpKey = `grp-${tab.id}`;
         const grpTargeted = isJsTarget(herdrAll, grpKey, now);
-        const nameMap = tabPaneNames(inTab, named);
+        const nameMap = tabPaneNames(splitInTab, named);
         if (shut && inTab.some((p) => p.pane === focusedPane)) focusedRowAt = rIdx;
         const body = shut ? [] : inTab.flatMap((p) => paneRow(p, tab, space, nameMap, rIdx, headed));
         const grpHoverKey = `grp:${tab.id}`;
@@ -720,7 +794,7 @@ export default class Agents extends View {
             })
             .on_mouse_move((e) => {
               recordHoverIndex(this.scrollState, rIdx, now);
-              reportDragTarget(herdrAll, e, { type: "group", key: grpKey, tab: tab.id, name: name ?? `${inTab.length} panes` }, now);
+              this.noteDragTarget(e, { type: "group", key: grpKey, tab: tab.id, name: name ?? `${inTab.length} panes` }, now);
             })
             .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.menu("tab", { id: tab.id, space: space.id }); })
             .on_click((e) => {
@@ -760,12 +834,12 @@ export default class Agents extends View {
           .px(4)
           .on_mouse_move((e) => {
             recordHoverIndex(this.scrollState, rIdx, now);
-            reportDragTarget(herdrAll, e, { type: "gap", key, space: spaceId, ...place }, now);
+            this.noteDragTarget(e, { type: "gap", key, space: spaceId, ...place }, now);
           })
           .when(targeted, (el) => el.child(div().w_full().h(3).rounded(2).bg(t.accent)));
       };
 
-      const spaceHeader = (space, spaceIndex, totalPanes, topStatus, rIdx) => {
+      const spaceHeader = (space, visualIndex, modelIndex, totalPanes, topStatus, rIdx) => {
         const open = !this.spacesFolded.has(space.id);
         const fill = spaceFill(space.id);
         const spDropKey = `sp-${space.id}`;
@@ -785,7 +859,7 @@ export default class Agents extends View {
           .items_center()
           .text_size(11)
           .font_medium()
-          .when(spaceIndex > 0, (el) => el.mt(6).border_t(1).border_color(t.border).h(36).pt(10))
+          .when(visualIndex > 0, (el) => el.mt(6).border_t(1).border_color(t.border).h(36).pt(10))
           .when(dragNow?.kind === "space" && dragNow?.space === space.id, (el) => el.opacity(0.55))
           .when(dropTargeted, (el) => el.border_1().border_color(t.accent).bg(t.accent + "18"))
           .when(orderTargeted, (el) => el.border_b(2).border_color(t.accent))
@@ -803,9 +877,9 @@ export default class Agents extends View {
           .on_mouse_move((e) => {
             recordHoverIndex(this.scrollState, rIdx, now);
             if (dragNow?.kind === "space") {
-              reportDragTarget(herdrAll, e, { type: "space-order", key: spOrderKey, space: space.id, index: spaceIndex + 1, name: space.name, machine: space.machine ?? null }, now);
+              this.noteDragTarget(e, { type: "space-order", key: spOrderKey, space: space.id, index: modelIndex + 1, name: space.name, machine: space.machine ?? null }, now);
             } else {
-              reportDragTarget(herdrAll, e, { type: "space", key: spDropKey, space: space.id, name: space.name, machine: space.machine ?? null }, now);
+              this.noteDragTarget(e, { type: "space", key: spDropKey, space: space.id, name: space.name, machine: space.machine ?? null }, now);
             }
           })
           .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.menu("space", { id: space.id }); })
@@ -841,7 +915,7 @@ export default class Agents extends View {
       if (collapsed) {
         for (const ws of treeData) {
           for (const tb of ws.tabs) {
-            const nameMap = tabPaneNames(tb.panes, named);
+            const nameMap = tabPaneNames(tb.splitPanes, named);
             for (const p of tb.panes) {
               rows.push(...paneRow(p, tb.tab, ws.space, nameMap, rows.length, false));
             }
@@ -886,7 +960,7 @@ export default class Agents extends View {
             const st = (p.terminal && this.listed.get(p.terminal)) || p.status;
             return (RANK[st] ?? 0) > (RANK[m] ?? 0) ? st : m;
           }, null);
-          rows.push(spaceHeader(ws.space, ws.spaceIndex, allSpacePanes.length, topStatus, rows.length));
+          rows.push(spaceHeader(ws.space, ws.spaceIndex, ws.modelSpaceIndex, allSpacePanes.length, topStatus, rows.length));
           if (this.spacesFolded.has(ws.space.id)) continue;
           if (ws.tabs.length === 0) {
             rows.push(gapRow(ws.space.id, {}, 8, rows.length));
@@ -894,7 +968,7 @@ export default class Agents extends View {
           }
           ws.tabs.forEach((tb, ti) => {
             if (ti === 0) rows.push(gapRow(ws.space.id, { before: tb.tab.id }, 6, rows.length));
-            rows.push(tabFrame(tb.tab, ws.space, tb.panes, rows.length));
+            rows.push(tabFrame(tb.tab, ws.space, tb.panes, tb.splitPanes, rows.length));
             rows.push(gapRow(ws.space.id, { after: tb.tab.id }, ti < ws.tabs.length - 1 ? 8 : 6, rows.length));
           });
         }
@@ -925,7 +999,11 @@ export default class Agents extends View {
       .border_color(t.border)
       .text_size(13)
       .on_mouse_down_out(() => clearJsDrag(herdrAll))
-      .on_mouse_move((e) => trackDragMove(herdrAll, e, now))
+      .on_mouse_move((e) => {
+        this.lastPointerPos = e?.position ?? null;
+        if (this.lastSidebarTarget?.bounds && e?.position && !pointInBounds(e.position, this.lastSidebarTarget.bounds)) this.lastSidebarTarget = null;
+        trackDragMove(herdrAll, e, now);
+      })
       .on_mouse_up("left", (e, cx) => {
         this.lastSelfActionAt = Date.now();
         if (finishJsDrag(herdrAll, cx, null, Date.now(), e?.position)) cx.notify();

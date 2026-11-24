@@ -7,7 +7,8 @@ Visual **Workspace → Tab → Pane** management, persistent pane naming, and fu
 - **Three clear layers (`Workspace → Tab → Pane`).**
   - **Pane:** every terminal (`zsh`, `nvim`, scripts), coding agent CLI (`Claude Code`, `Codex`, etc.), or mod pane. Double-click a pane header or sidebar row, right-click → **Rename pane**, or press `Alt-F2` to give it a persistent `pane-name` label that survives restarts and cross-space moves—with automatic forward compatibility for Herdr 0.1.17's native `pane.rename` (`panes()[i].name` / `agents()[i].pane_name`, including non-terminal mod panes).
   - **Tab:** one or more panes sharing the screen together. Shown as a pill in the top bar (listing every pane's icon and name) and as a space-tinted rounded card in the sidebar **Agents** tree (foldable, double-click to rename, hover `+` to split a new pane right, right-click for tab actions).
-  - **Workspace:** a collection of tabs in **Spaces** and in the **Agents** tree, in fixed structural order that stays right where you drag it, with a hover `+` button on workspace headers to open a new tab (or Launch Menu when active).
+  - **Workspace:** a collection of tabs in **Spaces** and in the **Agents** tree, in the order you drag them to (a pane, tab group or workspace whose status changes jumps to the top of its group, workspace and the list; the **Spaces** list and tab bar keep their fixed order), with a hover `+` button on workspace headers to open a new tab (or Launch Menu when active).
+- **Groups are real groups.** A tab frame with a header (fold chevron, name, `+`) appears only while a tab holds 2+ panes; when a group shrinks to one pane the stale group name is cleared and it becomes a plain card you can drag out freely.
 - **Full tree + Priority view in `Agents`.** Switch between **Grouped by workspace** (every workspace, tab frame, and pane—including plain shells and mod panes—plus sub-agent trees) and **Priority** (status-reporting agents ordered by `Needs you → Done → Working → Idle`).
 - **Drag and drop everywhere (mouse & trackpad).** Works out of the box on **official Herdr 0.1.16+** (pure-JS cross-panel drag fallback) and automatically upgrades to floating drag cards + 4-edge main-screen split previews on Herdr builds with native drag APIs:
   - Drag any **Pane** (from a pane header, any top-bar tab's pane icon/name—including the active tab—or any sidebar row) onto another **Pane** (on official Herdr, its `30px` header bar; on native-drag builds, any pane edge/center), onto a **Tab** pill or sidebar **Tab** header to join it, into the **gap** between tabs (or top-bar `+`) to split it into its own tab, or onto any **Workspace** (or `+`) to move it across workspaces on the same machine.
@@ -61,7 +62,7 @@ It copies `layouts/herdbook.json` and the six `mods/herdbook-*` folders into `~/
 ./tests/run.sh
 ```
 
-Runs the **33-test** Node suite (`tests/drag.test.mjs`, `tests/scroll.test.mjs`, `tests/groups.test.mjs`, `tests/move.test.mjs`, `tests/names.test.mjs`, `tests/rename.test.mjs`) and asserts byte-for-byte parity across all four self-contained `mods/*/drag.js` copies (`herdbook-agents`, `herdbook-tabs`, `herdbook-pane`, `herdbook-spaces`). When editing `mods/herdbook-agents/drag.js`, run `./scripts/sync-drag.sh` first.
+Runs the **39-test** Node suite (`tests/drag.test.mjs`, `tests/scroll.test.mjs`, `tests/groups.test.mjs`, `tests/move.test.mjs`, `tests/names.test.mjs`, `tests/rename.test.mjs`) and asserts byte-for-byte parity across all four self-contained `mods/*/drag.js` copies (`herdbook-agents`, `herdbook-tabs`, `herdbook-pane`, `herdbook-spaces`). When editing `mods/herdbook-agents/drag.js`, run `./scripts/sync-drag.sh` first.
 
 ## 中文说明
 
