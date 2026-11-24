@@ -13,7 +13,7 @@ Visual **Workspace → Tab → Pane** management, persistent pane naming, and fu
   - Drag any **Pane** (from a pane header, any top-bar tab's pane icon/name—including the active tab—or any sidebar row) onto another **Pane** (on official Herdr, its `30px` header bar; on native-drag builds, any pane edge/center), onto a **Tab** pill or sidebar **Tab** header to join it, into the **gap** between tabs (or top-bar `+`) to split it into its own tab, or onto any **Workspace** (or `+`) to move it across workspaces on the same machine.
   - Drag any **Tab** (top-bar pill or sidebar tab header) to reorder tabs, place between tabs in another workspace, or move the whole tab to another/new workspace.
   - Drag any **Workspace** row or header to reorder workspaces within its machine.
-  - **Trackpad-friendly:** expanded gap hit zones while dragging, stale-drag auto-cleanup, and automatic edge scrolling on long lists.
+  - **Trackpad-friendly:** constant-height gap hit zones (`0px` layout shift), viewport-anchored trackpad scroll stability (pressing or dragging a tab/pane halfway down a long list never jumps to the top), stale-drag auto-cleanup, and deliberate edge auto-scrolling.
 
 Works on official Herdr 0.1.16+ (macOS, Linux, Windows). No network.
 
@@ -41,9 +41,9 @@ It copies `layouts/herdbook.json` and the six `mods/herdbook-*` folders into `~/
   "resizable": false,
   "window_drag": true,
   "children": [
-    { "id": "tabs", "type": "block", "size": { "weight": 1 }, "content": { "mod": "herdbook-tabs" } },
-    { "id": "frost", "type": "block", "size": { "px": 68 }, "content": { "mod": "frost", "props": { "block": "frost" } } },
-    { "id": "usage", "type": "block", "size": { "px": 78 }, "content": { "mod": "usage-meter", "props": { "block": "usage" } } }
+    { "id": "tabs", "type": "block", "size": { "weight": 1 }, "window_drag": true, "content": { "mod": "herdbook-tabs" } },
+    { "id": "frost", "type": "block", "size": { "px": 77 }, "window_drag": true, "content": { "mod": "frost", "props": { "block": "frost" } } },
+    { "id": "usage", "type": "block", "size": { "px": 78 }, "window_drag": true, "content": { "mod": "usage-meter", "props": { "block": "usage" } } }
   ]
 }
 ```
@@ -55,13 +55,13 @@ It copies `layouts/herdbook.json` and the six `mods/herdbook-*` folders into `~/
 - Runs `git rev-parse` in a space's folder for git status and worktree menu items, matching Herdr's shipped `spaces` and `menu` mods.
 - Reads only `mod.json` under `appHome()/mods/` via `readTextFile` to detect optional sibling mods (`herdbook-menu`, `herdbook-rename`, `launch-menu`).
 
-## Tests
+## Tests & Maintenance
 
 ```sh
 ./tests/run.sh
 ```
 
-(If editing `mods/herdbook-agents/drag.js`, run `./scripts/sync-drag.sh` first so all four self-contained mod copies stay byte-for-byte identical; `./tests/run.sh` asserts sync parity.)
+Runs the **33-test** Node suite (`tests/drag.test.mjs`, `tests/scroll.test.mjs`, `tests/groups.test.mjs`, `tests/move.test.mjs`, `tests/names.test.mjs`, `tests/rename.test.mjs`) and asserts byte-for-byte parity across all four self-contained `mods/*/drag.js` copies (`herdbook-agents`, `herdbook-tabs`, `herdbook-pane`, `herdbook-spaces`). When editing `mods/herdbook-agents/drag.js`, run `./scripts/sync-drag.sh` first.
 
 ## 中文说明
 
@@ -69,7 +69,7 @@ It copies `layouts/herdbook.json` and the six `mods/herdbook-*` folders into `~/
 
 - **Pane（面板）**：每个终端（`zsh`、`nvim`）、运行中的 Agent CLI 或 Mod 面板。双击标题栏/侧栏行、右键 **Rename pane** 或按 `Alt-F2` 即可写入持久化 `pane-name` 标签（跨工作区迁移与重启均保留），并前向兼容 Herdr 0.1.17 原生 `pane.rename`。
 - **Tab（标签页）**：同屏分屏显示的 1~N 个 Pane 的聚合。顶栏胶囊显示每个分屏图标与名称；左侧 **Agents** 面板的「Grouped by workspace」视图将其展示为带工作区主题色的圆角卡片框（支持普通终端显示、折叠、双击改名、悬停 `+` 快速向右分屏、固定顺序不乱跳；右上角可随时切回 **Priority** 视图）。
-- **全区域鼠标/触控板拖拽（双引擎兼容）**：官方版 Herdr 0.1.16+ 开箱即用，支持在 Spaces、Agents、顶栏与 Pane 标题栏之间互拖合并、拆成独立 Tab、排序或同机跨 Workspace 迁移；随时可按 `Ctrl+Shift+L` 无损切回原布局，也能在 `tabs-row` 中与 Frost、Usage Meter、Launch Menu 无缝共存。
+- **全区域鼠标/触控板拖拽（双引擎兼容）**：官方版 Herdr 0.1.16+ 开箱即用，支持在 Spaces、Agents、顶栏与 Pane 标题栏之间互拖合并、拆成独立 Tab、排序或同机跨 Workspace 迁移；针对触控板做了外层 `*-viewport` 视口锚定防跳顶设计（长列表滚到底部按住/拖拽 Tab 或 Pane 保持 `0px` 稳定不回弹）；随时可按 `Ctrl+Shift+L` 无损切回原布局，也能在 `tabs-row` 中与 Frost、Usage Meter、Launch Menu 无缝共存。
 
 安装时对你的 Herdr agent 说：「Add the Herdbook layout from github.com/zylbeyondlimits/herdr-herdbook」。
 
