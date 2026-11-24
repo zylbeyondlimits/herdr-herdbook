@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chip, label, hasTrailingSibling } from "./build/herdbook-tabs/names.mjs";
+import { chip, label, hasTrailingSibling, tabChipDropAction } from "./build/herdbook-tabs/names.mjs";
 
 const shell = { name: "zsh", key: "zsh", shell: true, icon: "icons/shell.svg", tint: true };
 const claude = { name: "Claude Code", key: "claude", agent: true, icon: "icons/claude.svg" };
@@ -104,4 +104,123 @@ test("hasTrailingSibling detects usage-meter, frost, or both in tabs-row and ign
     ],
   };
   assert.equal(hasTrailingSibling(withHiddenTrailing), false);
+});
+
+test("tabChipDropAction supports merging single-pane tabs, splitting out to edges/own edges, and multi-pane tab reorder", () => {
+  const allPanes = [
+    { pane: "p1", terminal: "t1", tab: "tb1" },
+    { pane: "p2", terminal: "t2", tab: "tb2" },
+    { pane: "p3", terminal: "t3", tab: "tb2" },
+    { pane: "p4", terminal: "t4", tab: "tb3" },
+  ];
+  const bounds = { x: 200, y: 8, width: 100, height: 29 };
+
+  // 1) Dragging a 1-pane tab (kind: "tab") onto center of tb2 merges into tb2.
+  const mergeTab = tabChipDropAction({
+    drag: { kind: "tab", tab: "tb1" },
+    tab: { id: "tb2", name: "tb2" },
+    tabLabel: "backend",
+    spaceId: "s1",
+    panes: allPanes,
+    bounds,
+    localX: 50,
+  });
+  assert.equal(mergeTab.type, "group");
+  assert.equal(mergeTab.tab, "tb2");
+  assert.equal(mergeTab.name, "backend");
+
+  // 2) Dragging a 1-pane tab onto left/right edge of tb2 reorders before/after tb2 with edge sub-rect.
+  const beforeTab = tabChipDropAction({
+    drag: { kind: "tab", tab: "tb1" },
+    tab: { id: "tb2", name: "tb2" },
+    spaceId: "s1",
+    panes: allPanes,
+    bounds,
+    localX: 5,
+  });
+  assert.equal(beforeTab.type, "gap");
+  assert.equal(beforeTab.before, "tb2");
+  assert.equal(beforeTab.bounds.x, 200);
+  assert.ok(beforeTab.bounds.width <= 23);
+
+  const afterTab = tabChipDropAction({
+    drag: { kind: "tab", tab: "tb1" },
+    tab: { id: "tb2", name: "tb2" },
+    spaceId: "s1",
+    panes: allPanes,
+    bounds,
+    localX: 95,
+  });
+  assert.equal(afterTab.type, "gap");
+  assert.equal(afterTab.after, "tb2");
+  assert.ok(afterTab.bounds.x >= 277 && afterTab.bounds.x + afterTab.bounds.width === 300);
+
+  // 3) Dragging a 1-pane tab over itself is ignored.
+  assert.equal(
+    tabChipDropAction({ drag: { kind: "tab", tab: "tb1" }, tab: { id: "tb1" }, spaceId: "s1", panes: allPanes, bounds, localX: 5 }),
+    null,
+  );
+
+  // 4) Dragging a pane segment from multi-pane tb2 onto center of tb3 merges into tb3.
+  const segMerge = tabChipDropAction({
+    drag: { kind: "pane", pane: "p2", terminal: "t2" },
+    tab: { id: "tb3", name: "tb3" },
+    tabLabel: "docs",
+    spaceId: "s1",
+    panes: allPanes,
+    bounds,
+    localX: 50,
+  });
+  assert.deepEqual(segMerge, { type: "group", key: "tabgrp-tb3", tab: "tb3", name: "docs", bounds });
+
+  // 5) Dragging a pane segment from tb2 onto tb2's OWN left/right edge splits out before/after tb2; center cancels.
+  const ownLeft = tabChipDropAction({
+    drag: { kind: "pane", pane: "p2", terminal: "t2" },
+    tab: { id: "tb2" },
+    spaceId: "s1",
+    panes: allPanes,
+    bounds,
+    localX: 6,
+  });
+  assert.equal(ownLeft.type, "gap");
+  assert.equal(ownLeft.before, "tb2");
+
+  const ownRight = tabChipDropAction({
+    drag: { kind: "pane", pane: "p2", terminal: "t2" },
+    tab: { id: "tb2" },
+    spaceId: "s1",
+    panes: allPanes,
+    bounds,
+    localX: 94,
+  });
+  assert.equal(ownRight.type, "gap");
+  assert.equal(ownRight.after, "tb2");
+
+  assert.equal(
+    tabChipDropAction({ drag: { kind: "pane", pane: "p2", terminal: "t2" }, tab: { id: "tb2" }, spaceId: "s1", panes: allPanes, bounds, localX: 50 }),
+    null,
+  );
+
+  // 6) Dragging a 2-pane whole tab (kind: "tab") over tb3 only reorders left/right, never merges.
+  const multiLeft = tabChipDropAction({
+    drag: { kind: "tab", tab: "tb2" },
+    tab: { id: "tb3" },
+    spaceId: "s1",
+    panes: allPanes,
+    bounds,
+    localX: 40,
+  });
+  assert.equal(multiLeft.type, "gap");
+  assert.equal(multiLeft.before, "tb3");
+
+  const multiRight = tabChipDropAction({
+    drag: { kind: "tab", tab: "tb2" },
+    tab: { id: "tb3" },
+    spaceId: "s1",
+    panes: allPanes,
+    bounds,
+    localX: 60,
+  });
+  assert.equal(multiRight.type, "gap");
+  assert.equal(multiRight.after, "tb3");
 });

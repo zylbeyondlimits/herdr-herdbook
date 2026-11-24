@@ -11,6 +11,7 @@ import {
   reportDragTarget,
   trackDragMove,
   isJsTarget,
+  clearDragTarget,
   finishJsDrag,
   executeDrop,
   gapSlotIndex,
@@ -399,4 +400,56 @@ test("Route 1 (Native Herdr drag) & edge autoScrollOnDrag", () => {
     800,
   );
   assert.deepEqual(scrolled, [23]);
+});
+
+test("Route 2: dragging a 1-pane tab onto another tab (type: 'group') merges its pane into that tab", async () => {
+  const { h, state } = fakeOfficialHost();
+  startModDrag(h, { kind: "tab", tab: "ta2", label: "ta2", x: 10, y: 10 }, 100);
+  reportDragTarget(
+    h,
+    { position: { x: 40, y: 15 }, bounds: { x: 10, y: 5, width: 100, height: 29 } },
+    { type: "group", key: "tabgrp-ta1", tab: "ta1", name: "ta1" },
+    120,
+  );
+  assert.equal(isJsTarget(h, "tabgrp-ta1", 120), true);
+  const d = activeDrag(h, 120);
+  const res = await executeDrop(h, d, d.target);
+  assert.equal(res.ok, true);
+  assert.equal(state.panes.find((p) => p.terminal === "t3")?.tab, "ta1");
+  assert.equal(state.spaces[0].tabs.some((t) => t.id === "ta2"), false);
+});
+
+test("Route 1 & Route 2: target.bounds overrides event bounds and clearDragTarget resets mutually exclusive targets", () => {
+  const calls = [];
+  let current = null;
+  const nativeHost = {
+    startDrag: (s) => { current = { ...s, space: "s1", machine: null }; },
+    dragging: () => current,
+    setDragSpace: (t) => calls.push(["space", t]),
+    setDragTab: (t) => calls.push(["tab", t]),
+    setDragGroup: (t) => calls.push(["group", t]),
+    setDragGap: (t) => calls.push(["gap", t]),
+  };
+  startModDrag(nativeHost, { kind: "pane", pane: "p1", terminal: "t1", x: 5, y: 5 });
+  const subRect = { x: 200, y: 8, width: 22, height: 29 };
+  reportDragTarget(
+    nativeHost,
+    { position: { x: 205, y: 15 }, bounds: { x: 200, y: 8, width: 120, height: 29 } },
+    { type: "gap", key: "g", space: "s1", before: "ta2", bounds: subRect },
+  );
+  const gapCall = calls.findLast(([k, v]) => k === "gap" && v);
+  assert.equal(gapCall[1].width, 22);
+  assert.deepEqual(calls.slice(-3).filter(([, v]) => v === null).map(([k]) => k), ["space", "tab", "group"]);
+
+  calls.length = 0;
+  clearDragTarget(nativeHost);
+  assert.deepEqual(calls, [["space", null], ["tab", null], ["group", null], ["gap", null]]);
+
+  const { h, store } = fakeOfficialHost();
+  startModDrag(h, { kind: "pane", pane: "p2", terminal: "t2", x: 10, y: 10 }, 100);
+  reportDragTarget(h, { position: { x: 20, y: 15 }, bounds: { x: 0, y: 0, width: 100, height: 29 } }, { type: "group", key: "k1", tab: "ta2" }, 120);
+  assert.equal(isJsTarget(h, "k1", 120), true);
+  clearDragTarget(h, 130);
+  assert.equal(store["herdbook.drag"].target, null);
+  assert.equal(isJsTarget(h, "k1", 130), false);
 });

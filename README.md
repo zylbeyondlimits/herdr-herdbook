@@ -53,7 +53,7 @@ When a pane's status changes (`idle → working`, `working → blocked`, `workin
 ![Group lifecycle and auto-dissolve](assets/demo-group-dissolve.webp)
 
 - A group header appears only while a tab holds **2+ panes**. Name it (double-click), and the top bar shows its icons plus the name. When it shrinks to one pane, the stale name is cleared and it becomes a plain card you can drag straight out.
-- **Drag any pane** (pane header, top-bar segment, sidebar row) onto another pane, a tab, the gap between tabs (becomes its own tab), or another workspace. **Drag any tab** to reorder or move it, and **any workspace** to reorder within its machine.
+- **Drag any pane** (pane header, top-bar segment, single-pane tab, or sidebar row) onto another pane, the center of a tab chip or group header (to merge), the edges of a tab chip, the blank space of the top bar, or the gap between sidebar groups (to split into its own tab), or another workspace. **Drag any tab** to reorder or move it, and **any workspace** to reorder within its machine.
 - **Dual engine:** official Herdr uses a pure-JS cross-panel drag (`shared("herdbook.drag")`) with stale-drag cleanup; builds with native drag APIs automatically get floating drag cards and 4-edge split previews.
 - **Trackpad-friendly:** constant-height gap hit zones, viewport-anchored scrolling (pressing or dragging halfway down a long list never jumps to the top) and deliberate edge auto-scroll.
 
@@ -64,7 +64,7 @@ When a pane's status changes (`idle → working`, `working → blocked`, `workin
 | **Workspace** (header) | Fold / unfold | — | New tab (or Launch Menu) | Reorder workspaces; drop target for panes and tabs | Rename, worktrees, close |
 | **Tab group** (2+ panes) | Focus first pane | Rename tab | Split pane right | Reorder, join, or move to another workspace | Tab menu, move to space |
 | **Pane** (row or header) | Focus | **Rename pane** | Split right | Merge into a tab, split into its own tab, move to a workspace | `Alt-F2` rename, pin, **Move to space…**, close |
-| **Top-bar chip** | Select tab | Rename tab | — | Drag the tab, or any pane segment inside it | Tab menu; `+` opens Launch Menu / New menu |
+| **Top-bar chip** | Select tab | Rename tab | — | Center merges single-pane tab / segment into target tab; edges reorder or split out; blank tab-bar space splits pane to end of workspace | Tab menu; `+` opens Launch Menu / New menu |
 
 ## Co-existence in `tabs-row`
 
@@ -110,7 +110,7 @@ When a pane's status changes (`idle → working`, `working → blocked`, `workin
 ./tests/run.sh
 ```
 
-Runs the **39-test** Node suite (`tests/drag.test.mjs`, `tests/scroll.test.mjs`, `tests/groups.test.mjs`, `tests/move.test.mjs`, `tests/names.test.mjs`, `tests/rename.test.mjs`) and asserts byte-for-byte parity across the four self-contained `mods/*/drag.js` copies (`herdbook-agents`, `herdbook-tabs`, `herdbook-pane`, `herdbook-spaces`). When editing `mods/herdbook-agents/drag.js`, run `./scripts/sync-drag.sh` first.
+Runs the **42-test** Node suite (`tests/drag.test.mjs`, `tests/scroll.test.mjs`, `tests/groups.test.mjs`, `tests/move.test.mjs`, `tests/names.test.mjs`, `tests/rename.test.mjs`) and asserts byte-for-byte parity across the four self-contained `mods/*/drag.js` copies (`herdbook-agents`, `herdbook-tabs`, `herdbook-pane`, `herdbook-spaces`). When editing `mods/herdbook-agents/drag.js`, run `./scripts/sync-drag.sh` first.
 
 ## 简体中文
 
@@ -120,7 +120,7 @@ Herdbook 面向喜欢**图形化界面与鼠标/触控板直觉操作**的 Herdr
 - **完整三层树：** 侧栏 **Agents** 的 `Grouped by workspace` 视图展示所有工作区、标签组和窗格（含普通终端、编辑器、Mod 窗格与子 Agent）；也可一键切到 **Priority** 视图（按 `Needs you → Done → Working → Idle` 排序）。
 - **状态变化三级冒泡置顶：** 窗格状态变化时，窗格跳到组内最前，该组跳到工作区最前，该工作区跳到整个 Agents 列表最前；点开已完成的窗格（`done → idle`）不会触发跳动；手动拖拽的位置会保持到下一次状态变化；左上角 **Spaces** 与顶栏保持原有顺序。
 - **真正的「组」：** 标签里有 2 个及以上窗格才显示组头（可折叠、可命名）；缩回 1 个窗格时自动清掉旧组名，变成可随意拖出的普通卡片。顶栏胶囊按分屏顺序显示每个窗格的图标和名字（`·` 分隔，每段都可单独点击或拖走）。
-- **全区域拖拽（双引擎）：** 官方版 Herdr 0.1.16+ 开箱即用，可在 Spaces、Agents、顶栏与窗格标题栏之间互拖合并、拆成独立标签、排序或同机跨工作区迁移；支持原生拖拽 API 的构建会自动升级为浮动拖拽卡片与四边分屏预览；触控板长列表滚动、按住拖拽不会跳回顶部。
+- **全区域拖拽（双引擎）：** 官方版 Herdr 0.1.16+ 开箱即用，支持在 Spaces、Agents、顶栏与窗格标题栏之间互拖：单窗格或组内片段拖到顶栏空白处/胶囊左右缘即可在当前工作区拆成独立标签，拖到另一颗标签中心即可直接合并成组，也可跨工作区迁移或排序；支持原生拖拽 API 的构建会自动升级为浮动拖拽卡片与四边分屏预览；触控板长列表滚动、按住拖拽不会跳回顶部。
 - **自由组合：** 随时按 `Ctrl+Shift+L` 无损切回原布局；也可在 `tabs-row` 中与 Usage Meter、Launch Menu（以及即将发布的 Frost）并排使用。
 
 | | 单击 | 双击 | 悬停 `+` | 拖拽 | 右键 / 快捷键 |

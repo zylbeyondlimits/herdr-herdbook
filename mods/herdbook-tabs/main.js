@@ -2,13 +2,14 @@ import { View, div, svg, image } from "gpui-kit";
 import { h_flex, ScrollHandle } from "gpui-base";
 import { spaces, panes, terminals, run, openOverlay, theme, window, shared, layout, settings, appHome, readTextFile } from "herdr";
 import * as herdrAll from "herdr";
-import { chip, hasTrailingSibling } from "./names.js";
+import { chip, hasTrailingSibling, tabChipDropAction } from "./names.js";
 import {
   activeDrag,
   startModDrag,
   cancelModDrag,
   clearJsDrag,
   reportDragTarget,
+  clearDragTarget,
   trackDragMove,
   isJsTarget,
   finishJsDrag,
@@ -144,15 +145,20 @@ export default class Tabs extends View {
         .when(Boolean(g.program?.icon), (el) => el.child(pic(g.program)))
         .child(div().max_w(96).truncate().child(g.name)));
 
-      const ordKey = `tabord-${c.id}`;
       const grpKey = `tabgrp-${c.id}`;
-      const highlighted = isJsTarget(herdrAll, ordKey, now) || isJsTarget(herdrAll, grpKey, now);
+      const beforeKey = `tabgap-before-${c.id}`;
+      const afterKey = `tabgap-after-${c.id}`;
+      const grpTargeted = isJsTarget(herdrAll, grpKey, now);
+      const beforeTargeted = isJsTarget(herdrAll, beforeKey, now);
+      const afterTargeted = isJsTarget(herdrAll, afterKey, now);
 
       return h_flex().id(`tab-${c.id}`).h(29).px(10).gap(7).rounded(7).items_center().flex_none().text_size(12.8)
         .when(i <= active, (el) => el.on_size_change((_size, cx) => { this.scroll.scroll_to_item(active); cx.notify(); }))
-        .border(highlighted ? 2 : 1)
-        .border_color(highlighted ? t.accent : (c.active ? t.border : t.chrome))
-        .bg(highlighted ? t.accent + "1c" : (c.active ? t.raised : t.chrome))
+        .border(grpTargeted ? 2 : 1)
+        .border_color(grpTargeted ? t.accent : (c.active ? t.border : t.chrome))
+        .bg(grpTargeted ? t.accent + "1c" : (c.active ? t.raised : t.chrome))
+        .when(beforeTargeted, (el) => el.border_l(3).border_color(t.accent))
+        .when(afterTargeted, (el) => el.border_r(3).border_color(t.accent))
         .text_color(c.active ? t.foreground : t.muted)
         .hover((s) => s.bg(t.hover))
         .when(dragNow?.tab === c.id, (el) => el.opacity(0.55))
@@ -168,11 +174,20 @@ export default class Tabs extends View {
             trackDragMove(herdrAll, e, now);
             return;
           }
-          if (dragNow.kind === "tab" && dragNow.tab !== c.id) {
-            reportDragTarget(herdrAll, e, { type: "tab", key: ordKey, tab: c.id, index: space.tabs.findIndex((x) => x.id === c.id) + 1 }, now);
-          } else if (dragNow.kind !== "tab" && dragNow.kind !== "space") {
-            reportDragTarget(herdrAll, e, { type: "group", key: grpKey, tab: c.id, name: k.name }, now);
-          }
+          const lx = typeof e?.local_position?.x === "number"
+            ? e.local_position.x
+            : (e?.position && e?.bounds ? e.position.x - e.bounds.x : null);
+          const action = tabChipDropAction({
+            drag: dragNow,
+            tab: c,
+            tabLabel: k.name,
+            spaceId: space?.id ?? null,
+            panes: all,
+            bounds: e?.bounds,
+            localX: lx,
+          });
+          if (action) reportDragTarget(herdrAll, e, action, now);
+          else clearDragTarget(herdrAll, now);
         })
         .on_click((e) => {
           if (recentlyDragged()) return;
@@ -184,7 +199,17 @@ export default class Tabs extends View {
           openOverlay({ mod: this.menu, kind: "popup", width: this.menu === "menu" ? 200 : 228, props: { tab: "tab", target: { id: c.id, space: space.id } } });
         })
         .when(k.kind === "one", (el) => el.children(k.icons.map(pic)))
-        .when(k.kind === "group", (el) => el.children(k.members.filter((g) => g.program?.icon).map((g, j) => lone(g, j, h_flex().flex_none().child(pic(g.program))))))
+        .when(k.kind === "group", (el) => el.children(k.members.map((g, j) => lone(
+          g,
+          j,
+          h_flex()
+            .flex_none()
+            .p(2)
+            .rounded(4)
+            .hover((s) => s.bg(t.hover))
+            .tooltip(`${g.name} — click to focus, drag to move pane`)
+            .child(g.program?.icon ? pic(g.program) : svg("mods/workspace-chrome/square.svg").size(13).flex_none().text_color(t.muted)),
+        ))))
         .when(k.kind === "many", (el) => el.children(k.segments.map(segment)).tooltip(k.name))
         .when(k.kind === "group", (el) => el.tooltip(k.tip))
         .when(k.kind !== "many", (el) => el.child(div().max_w(170).truncate().child(c.zoomed ? `${k.name} Z` : k.name)))
@@ -237,6 +262,8 @@ export default class Tabs extends View {
       })
       .child("+");
 
+    const emptyGapKey = space ? `tabempty-${space.id}` : "tabempty";
+    const emptyTargeted = isJsTarget(herdrAll, emptyGapKey, now);
     const siblingNext = hasTrailingSibling(root);
     return h_flex()
       .id("tabs-root")
@@ -274,7 +301,26 @@ export default class Tabs extends View {
               .overflow_x_scrollbar()
               .track_scroll(this.scroll)
               .on_size_change((_size, cx) => { if (!activeDrag(herdrAll) && active >= 0) { this.scroll.scroll_to_item(active); cx.notify(); } })
-              .children(shown.map(item)),
+              .children(shown.map(item))
+              .child(
+                div()
+                  .id("tab-empty-drop")
+                  .flex_1()
+                  .h_full()
+                  .min_w(0)
+                  .flex()
+                  .items_center()
+                  .on_mouse_move((e) => {
+                    if (!dragNow) return;
+                    const lastTab = shown.at(-1)?.id ?? null;
+                    if (!space || dragNow.kind === "space" || (dragNow.kind === "tab" && dragNow.tab === lastTab)) {
+                      clearDragTarget(herdrAll, now);
+                      return;
+                    }
+                    reportDragTarget(herdrAll, e, { type: "gap", key: emptyGapKey, space: space.id, ...(lastTab ? { after: lastTab } : {}), bounds: e.bounds }, now);
+                  })
+                  .when(emptyTargeted, (el) => el.child(div().w(3).h(22).ml(2).rounded(2).bg(t.accent))),
+              ),
           ),
       )
       .child(plusBtn)

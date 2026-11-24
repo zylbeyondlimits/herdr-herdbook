@@ -273,22 +273,37 @@ function validTarget(h, d, target) {
 }
 
 export function reportDragTarget(h, e, target, now = Date.now()) {
-  const bounds = e?.bounds;
+  const bounds = target?.bounds ?? e?.bounds;
   const pos = e?.position;
   if (hasNativeDrag(h)) {
     const d = h.dragging();
     if (!d || !bounds || !target) return;
     const rect = { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
     if (target.type === "space-order") {
-      if (d.kind === "space") h.setDragSpace({ space: target.space, index: target.index, name: target.name ?? "Space", machine: target.machine ?? null, ...rect });
+      if (d.kind === "space") {
+        h.setDragSpace({ space: target.space, index: target.index, name: target.name ?? "Space", machine: target.machine ?? null, ...rect });
+        h.setDragTab(null); h.setDragGroup(null); h.setDragGap(null);
+      }
     } else if (target.type === "space") {
-      if (d.kind !== "space") h.setDragSpace({ space: target.space, name: target.name ?? "Space", machine: target.machine ?? null, ...rect });
+      if (d.kind !== "space") {
+        h.setDragSpace({ space: target.space, name: target.space ? (target.name ?? "Space") : "Space", machine: target.machine ?? null, ...rect });
+        h.setDragTab(null); h.setDragGroup(null); h.setDragGap(null);
+      }
     } else if (target.type === "tab") {
-      if (d.kind === "tab") h.setDragTab({ tab: target.tab, index: target.index, ...rect });
+      if (d.kind === "tab") {
+        h.setDragTab({ tab: target.tab, index: target.index, ...rect });
+        h.setDragSpace(null); h.setDragGroup(null); h.setDragGap(null);
+      }
     } else if (target.type === "group") {
-      if (d.kind !== "space") h.setDragGroup({ tab: target.tab, pane: target.pane ?? null, name: target.name ?? "Tab", ...rect });
+      if (d.kind !== "space") {
+        h.setDragGroup({ tab: target.tab, pane: target.pane ?? null, name: target.name ?? "Tab", ...rect });
+        h.setDragSpace(null); h.setDragTab(null); h.setDragGap(null);
+      }
     } else if (target.type === "gap") {
-      if (d.kind !== "space") h.setDragGap({ space: target.space, before: target.before ?? null, after: target.after ?? null, ...rect });
+      if (d.kind !== "space") {
+        h.setDragGap({ space: target.space, before: target.before ?? null, after: target.after ?? null, ...rect });
+        h.setDragSpace(null); h.setDragTab(null); h.setDragGroup(null);
+      }
     }
     return;
   }
@@ -299,6 +314,20 @@ export function reportDragTarget(h, e, target, now = Date.now()) {
     ? { ...checked, bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height } }
     : checked;
   setJsTarget(h, d, withBounds, now);
+}
+
+export function clearDragTarget(h, now = Date.now()) {
+  if (hasNativeDrag(h)) {
+    h.setDragSpace(null);
+    h.setDragTab(null);
+    h.setDragGroup(null);
+    h.setDragGap(null);
+    return;
+  }
+  const d = readJsDrag(h, now, true);
+  if (d?.moving && d.target) {
+    h.setShared?.(SHARED_KEY, { ...d, target: null, at: now });
+  }
 }
 
 export function trackDragMove(h, e, now = Date.now()) {

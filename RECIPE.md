@@ -57,7 +57,7 @@ Herdr's window organized around three visible layers—**Workspace → Tab → P
   - `herdbook-pane` (Apache 2.0, cloned from `pane` 0.1.16): `main.js` + `drag.js` + `move-space.svg`, `split-right.svg`, `split-down.svg`, `zoom.svg`, `unzoom.svg`, `close.svg`.
   - `herdbook-spaces` (Apache 2.0, cloned from `spaces` 0.1.16): `main.js` + `drag.js`.
   - `herdbook-menu` (Apache 2.0, cloned from `menu` 0.1.16): `main.js` + pure `move.js` (`moveTerminals`).
-- `scripts/sync-drag.sh`: copies canonical `mods/herdbook-agents/drag.js` (`startModDrag`, `reportDragTarget`, `trackDragMove`, `finishJsDrag`, `executeDrop`, `moveTerminals`, `createScrollState`, `recordDragAnchor`, `recordHoverIndex`, `resetScrollAnchor`, `autoScrollOnDrag`) into `herdbook-tabs`, `herdbook-pane`, and `herdbook-spaces`; `tests/run.sh` asserts 4× byte-for-byte parity before running the 39-test Node suite (`drag.test.mjs`, `scroll.test.mjs`, `groups.test.mjs`, `move.test.mjs`, `names.test.mjs`, `rename.test.mjs`).
+- `scripts/sync-drag.sh`: copies canonical `mods/herdbook-agents/drag.js` (`startModDrag`, `reportDragTarget`, `clearDragTarget`, `trackDragMove`, `finishJsDrag`, `executeDrop`, `moveTerminals`, `createScrollState`, `recordDragAnchor`, `recordHoverIndex`, `resetScrollAnchor`, `autoScrollOnDrag`) into `herdbook-tabs`, `herdbook-pane`, and `herdbook-spaces`; `tests/run.sh` asserts 4× byte-for-byte parity before running the 42-test Node suite (`drag.test.mjs`, `scroll.test.mjs`, `groups.test.mjs`, `move.test.mjs`, `names.test.mjs`, `rename.test.mjs`).
 - Co-existence in `tabs-row`: wrap `herdbook-tabs` (`weight: 1`, `window_drag: true`) with `frost` (`px: 77`, `window_drag: true`, `props: { block: "frost" }`) and/or `usage-meter` (`px: 78`, `window_drag: true`, `props: { block: "usage" }`) inside a `42px` `row` (`resizable: false`, `window_drag: true`).
 - `herdr` APIs used: `spaces`, `machines`, `agents`, `panes`, `terminals`, `focused`, `layout`, `theme`, `settings`, `window`, `keys`, `commands`, `run`, `openOverlay`, `closeOverlay`, `notify`, `shared`, `setShared`, `setAgentOrder`, `hc`, `exec`, `watchFolder`, `appHome`, `home`, `readTextFile`, `checking`, and optional native drag functions via namespace import.
 
@@ -73,7 +73,7 @@ Herdr's window organized around three visible layers—**Workspace → Tab → P
 
 ## Done when
 
-- `./tests/run.sh` passes all **39** unit tests (including 4× `drag.js` byte-for-byte parity, trackpad scroll-stability, `0.1.17` `pane.name` / `pane_name` fallback, `herdbook-rename`, mod-pane & remote SSH drag rules, stale-drag cleanup, and `tabs-row` trailing sibling detection).
+- `./tests/run.sh` passes all **42** unit tests (including 4× `drag.js` byte-for-byte parity, top-bar edge split-out & single-pane chip merge, trackpad scroll-stability, `0.1.17` `pane.name` / `pane_name` fallback, `herdbook-rename`, mod-pane & remote SSH drag rules, stale-drag cleanup, and `tabs-row` trailing sibling detection).
 - `herdr-app check` passes with 0 errors and 0 `WARN` lines on all six `mods/herdbook-*` folders on both official Herdr and native-drag Herdr builds.
 - Setting `hc label t3 pane-name=api` (or `pane.rename` on 0.1.17+) updates the pane header, tab chip, and sidebar grouped/priority rows within a second; clearing it restores the default program/title label.
 - Hovering a workspace header or tab frame in `herdbook-agents` reveals `+` and creates a tab or right split without starting a drag; pressing or dragging a tab/pane when scrolled down keeps the sidebar at `0px` vertical jump.
